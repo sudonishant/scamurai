@@ -1,5 +1,5 @@
 # PS-03 developer convenience targets.
-.PHONY: help install fixtures test eval run-api run-web seed clean
+.PHONY: help install fixtures test eval run-api run-web web seed clean
 
 help:
 	@echo "PS-03 targets:"
@@ -9,6 +9,7 @@ help:
 	@echo "  make eval       - run fixture evaluation harness"
 	@echo "  make run-api    - start FastAPI on :8000"
 	@echo "  make run-web    - start Vite dev server on :5173"
+	@echo "  make web        - production build + serve web version on :4173"
 	@echo "  make seed       - populate a demo case against a running API"
 	@echo "  make clean      - remove caches, local DBs and generated storage"
 
@@ -30,6 +31,9 @@ run-api:
 
 run-web:
 	cd frontend && npm run dev
+
+web:
+	cd frontend && npm run build && npm run preview -- --host 0.0.0.0 --port 4173
 
 seed:
 	cd backend && python scripts/seed_demo.py
