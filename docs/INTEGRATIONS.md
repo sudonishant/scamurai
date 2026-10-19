@@ -8,11 +8,16 @@ capabilities and an honest status, surfaced at `GET /api/v1/cases/{id}/capabilit
 | Manual CSV/JSON import | **Real, local** | Same | Labeled `authorized_import`; snapshot preserved |
 | File/image upload | **Real, local** (signature, SHA-256, pHash, EXIF) | S3-compatible bucket | Separate original/derivative assets |
 | Generic public web fetch | **Real**, SSRF-guarded httpx | Same with egress proxy | Login walls/429/5xx become explicit outcomes |
-| Instagram / Facebook / YouTube / Reddit | **Not configured** | OAuth + official APIs after review | Shows `access_required`; import remains available |
+| Instagram / Facebook | **Not configured** | OAuth + official APIs after review | Shows `access_required`; import remains available |
+| YouTube comments | **Live adapter shipped** (`POST /connectors/youtube/import`); active with free `PS03_YOUTUBE_API_KEY` | Official Data API v3, key-only | commentsDisabled/quota/transport failures become explicit `SourceAccess` outcomes; denominator never faked |
+| Reddit | Status + OAuth helper shipped; approval-gated since 2025 | Manual Responsible Builder approval | Shows `not_configured` / `configured_pending_approval`; import remains available |
 | OCR (e.g. Tesseract/Cloud Vision) | **Disabled** (`PS03_OCR_PROVIDER` empty) | Provider + license + quota check | Transform returns `insufficient_evidence` limitation, never fake text |
 | Reverse image search (TinEye / Cloud Vision Web Detection) | **Disabled** | Adapter with verified terms/credentials | Snippets stay "leads" until the source is opened |
-| Fact-check search (e.g. Claim Search API) | **Imported fact-check library only** | Provider API | No-result is never proof of falsity |
-| LLM planning/summarization | **Disabled**; deterministic rules run offline | Configured model ID, no hard-coding | RAG findings require in-case evidence IDs + excerpts |
+| Fact-check search | **Live adapter shipped** (`POST /connectors/factcheck/search`); active with free `PS03_GOOGLE_FACTCHECK_API_KEY`; imported library still works offline | Google Fact Check Tools API | No-result is never proof of falsity; response says so explicitly |
+| LLM planning/summarization | **Adapter shipped** for Groq / OpenRouter / Gemini (`services/providers/llm.py`); activates only with a key; deterministic rules remain the offline default | OpenAI-compatible or Gemini endpoint, configured model ID | All content passed as untrusted data; JSON-only; 429/transport errors are typed, never fabricated output |
+
+> 🔑 **Free-tier credentials, step-by-step (Hinglish): [REQUIRED_CREDENTIALS.md](REQUIRED_CREDENTIALS.md)** —
+> exact signup steps, quota limits, env vars, and the minimum key set needed.
 | Jev (Choice/Score/Noul) | **Not implemented** (section 16: optional/experimental) | Pilot against baseline classifier first | Confidence ≠ accuracy; abstention preserved |
 | Celery + Redis | Compose config + `worker.py` contract | Durable broker with acks/late ack | Job state always in DB; idempotent tasks |
 | PostgreSQL | Alembic + SQLAlchemy ready; SQLite default locally | Primary authoritative store | Same SQL dialect-targeted models |

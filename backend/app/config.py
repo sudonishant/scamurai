@@ -50,9 +50,20 @@ class Settings(BaseSettings):
     ocr_provider: str | None = None          # e.g. "tesseract" when a binary is available
     reverse_search_provider: str | None = None
     factcheck_provider: str | None = None
-    llm_provider: str | None = None
+    llm_provider: str | None = None          # "groq" | "openrouter" | "gemini"
     llm_model_id: str | None = None
     jev_api_url: str | None = None
+
+    # --- Provider credentials (server-side only; never logged, prompted or exported) ---
+    # OpenAI-compatible providers (Groq, OpenRouter): same chat-completions shape.
+    llm_api_key: str | None = None
+    llm_base_url: str | None = None          # e.g. https://api.groq.com/openai/v1
+    gemini_api_key: str | None = None        # aistudio.google.com free-tier key
+    youtube_api_key: str | None = None       # Google Cloud, YouTube Data API v3
+    google_factcheck_api_key: str | None = None
+    reddit_client_id: str | None = None      # reddit.com/prefs/apps (approval-gated since 2025)
+    reddit_client_secret: str | None = None
+    reddit_user_agent: str | None = None
 
     export_link_ttl_seconds: int = 3600
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"

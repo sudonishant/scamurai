@@ -80,11 +80,17 @@ def check_capabilities() -> list[Capability]:
         Capability("facebook", False,
                    ["fetch_post", "fetch_comments"], "access_required",
                    "Page Public Content Access is reviewed/scoped; import available meanwhile."),
-        Capability("youtube", False,
-                   ["fetch_comments", "fetch_replies"], "access_required",
+        Capability("youtube", bool(settings.youtube_api_key),
+                   ["fetch_comments", "fetch_replies"],
+                   "configured" if settings.youtube_api_key else "access_required",
+                   "Free API key; commentThreads=1 quota unit, ~10k units/day."
+                   if settings.youtube_api_key else
                    "commentThreads/comments API key + quota required; import available meanwhile."),
-        Capability("reddit", False, ["fetch_post"], "not_configured",
-                   "API terms/rate limits require registration; import available."),
+        Capability("reddit", bool(settings.reddit_client_id), ["fetch_post"],
+                   "configured_pending_approval" if settings.reddit_client_id else "not_configured",
+                   ("OAuth client registered; Reddit manual app approval still required (2025 policy)."
+                    if settings.reddit_client_id else
+                    "Approval-gated since 2025 (2-4 weeks); free tier non-commercial; import available.")),
         Capability("reverse-image-search", bool(settings.reverse_search_provider),
                    ["reverse_search"],
                    "configured" if settings.reverse_search_provider else "not_configured",
@@ -92,12 +98,18 @@ def check_capabilities() -> list[Capability]:
         Capability("ocr", bool(settings.ocr_provider), ["extract_ocr"],
                    "configured" if settings.ocr_provider else "not_configured",
                    "No OCR engine available in this environment; OCR transforms report honestly."),
-        Capability("factcheck", bool(settings.factcheck_provider), ["claim_search"],
-                   "configured" if settings.factcheck_provider else "not_configured",
-                   "No fact-check API configured; claim workflow produces sourced query plans only."),
-        Capability("llm", bool(settings.llm_provider), ["plan", "summarize"],
-                   "configured" if settings.llm_provider else "not_configured",
-                   "Deterministic local rules run offline; LLM steps stay disabled without a provider."),
+        Capability("factcheck", bool(settings.google_factcheck_api_key or settings.factcheck_provider),
+                   ["claim_search"],
+                   "configured" if (settings.google_factcheck_api_key or settings.factcheck_provider)
+                   else "not_configured",
+                   ("Google Fact Check Tools API; no result is never proof of falsity."
+                    if (settings.google_factcheck_api_key or settings.factcheck_provider) else
+                    "No fact-check API configured; claim workflow produces sourced query plans only.")),
+        Capability("llm", bool(settings.llm_api_key or settings.gemini_api_key or settings.llm_provider),
+                   ["plan", "extract", "summarize"],
+                   "configured" if (settings.llm_api_key or settings.gemini_api_key or settings.llm_provider)
+                   else "not_configured",
+                   "Deterministic local rules run offline; LLM steps activate only with a key."),
     ]
     return caps
 

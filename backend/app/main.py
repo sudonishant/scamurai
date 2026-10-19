@@ -18,11 +18,15 @@ from . import __version__
 from .config import get_settings
 from .database import SessionLocal, init_db
 from .models import User
-from .routers import agent, cases, comments, exports, graph, runs
+from .routers import agent, cases, comments, connectors, exports, graph, runs
 from .services.jobs import reconcile_orphans
 
 settings = get_settings()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+# httpx/httpcore INFO lines print full URLs — Google API keys travel in the query
+# string, so keep those loggers above INFO to prevent credential leakage into logs.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 log = logging.getLogger("ps03")
 
 SEED_USERS = [
@@ -102,6 +106,7 @@ def create_app() -> FastAPI:
     app.include_router(agent.router)
     app.include_router(graph.router)
     app.include_router(comments.router)
+    app.include_router(connectors.router)
     app.include_router(exports.router)
     return app
 

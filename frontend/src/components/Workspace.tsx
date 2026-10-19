@@ -11,8 +11,9 @@ import FindingsView from "./FindingsView";
 import CompareView from "./CompareView";
 import ExportsView from "./ExportsView";
 import AgentView from "./AgentView";
+import ConnectorsView from "./ConnectorsView";
 
-type Tab = "graph" | "list" | "comments" | "findings" | "compare" | "agent" | "exports";
+type Tab = "graph" | "list" | "comments" | "findings" | "compare" | "agent" | "connectors" | "exports";
 
 export default function Workspace({ caseId, initialGoal }: { caseId: string; initialGoal: string }) {
   const [caseData, setCaseData] = useState<Case | null>(null);
@@ -58,7 +59,7 @@ export default function Workspace({ caseId, initialGoal }: { caseId: string; ini
         />
         <main style={{ minHeight: 0, display: "flex", flexDirection: "column" }}>
           <nav className="tabs" style={{ padding: "6px 10px 0", background: "var(--panel)" }}>
-            {(["graph", "list", "comments", "findings", "compare", "agent", "exports"] as Tab[]).map((t) => (
+            {(["graph", "list", "comments", "findings", "compare", "agent", "connectors", "exports"] as Tab[]).map((t) => (
               <button key={t} className={tab === t ? "active" : ""} onClick={() => setTab(t)}>
                 {t[0].toUpperCase() + t.slice(1)}
               </button>
@@ -77,6 +78,9 @@ export default function Workspace({ caseId, initialGoal }: { caseId: string; ini
             {tab === "findings" && <FindingsView caseId={caseId} role={caseData?.my_role || "viewer"} onChanged={bump} />}
             {tab === "compare" && <CompareView caseId={caseId} graph={graph} />}
             {tab === "agent" && <AgentView caseId={caseId} role={caseData?.my_role || "viewer"} />}
+            {tab === "connectors" && (
+              <ConnectorsView caseId={caseId} role={caseData?.my_role || "viewer"} onChanged={bump} />
+            )}
             {tab === "exports" && <ExportsView caseId={caseId} role={caseData?.my_role || "viewer"} />}
           </div>
         </main>

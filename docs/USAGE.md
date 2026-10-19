@@ -130,6 +130,9 @@ Kisi bhi job ko **Cancel** kar sakte ho — collected evidence delete nahi hota.
   Conflicts/rejected. Reviewer/owner har finding par *Accept / Need more / Reject* kar sakte hain.
 - **Comments tab** — coverage statement (non-comparable denominator kabhi 100% nahi banta),
   har row par **Explain** button, permalink status honestly shown.
+- **Connectors tab** — live providers (YouTube comments import, Google Fact Check search).
+  Key na ho to honestly `not configured`; free keys lene ki poori guide
+  [`REQUIRED_CREDENTIALS.md`](REQUIRED_CREDENTIALS.md) me hai.
 - **Agent tab** — goal choose karo; bounded agent allowlisted tools plan→policy→execute karta
   hai. External provider (OCR etc.) na ho to step honestly ruk jaata hai — koi fake evidence nahi.
 - **Exports tab** — PDF/HTML/CSV/JSON, scope (all/selected/flagged), redaction mode

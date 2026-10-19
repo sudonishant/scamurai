@@ -117,6 +117,23 @@ export const api = {
   stats: (caseId: string) =>
     request<Record<string, number>>(`/api/v1/cases/${caseId}/stats`),
 
+  youtubeImport: (caseId: string, url: string, maxPages = 3) =>
+    request<{
+      video_id: string;
+      comments_created: number;
+      uncertain_duplicates_held: number;
+      coverage: { status: string; unique_collected: number; platform_displayed_count: number | null };
+    }>(`/api/v1/cases/${caseId}/connectors/youtube/import`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url, max_pages: maxPages }),
+    }),
+  factcheckSearch: (caseId: string, query: string) =>
+    request<{ query: string; note: string; matches: {
+      claim: string; claimant: string; outcome: string; source: string; url: string; claim_date?: string;
+    }[] }>(`/api/v1/cases/${caseId}/connectors/factcheck/search`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query }),
+    }),
   runAgent: (caseId: string, goal: string, idempotencyKey: string) =>
     request<AgentRunResult>(`/api/v1/cases/${caseId}/agent/run`, {
       method: "POST", headers: { "Content-Type": "application/json" },

@@ -16,6 +16,12 @@ os.environ["PS03_STORAGE_DIR"] = str(_TMP / "storage")
 os.environ["PS03_OCR_PROVIDER"] = ""
 os.environ["PS03_REVERSE_SEARCH_PROVIDER"] = ""
 os.environ["PS03_LLM_PROVIDER"] = ""
+# Provider credentials must never leak from a developer's .env into the test run.
+for _var in ("PS03_LLM_API_KEY", "PS03_LLM_BASE_URL", "PS03_LLM_MODEL_ID",
+             "PS03_GEMINI_API_KEY", "PS03_YOUTUBE_API_KEY",
+             "PS03_GOOGLE_FACTCHECK_API_KEY", "PS03_REDDIT_CLIENT_ID",
+             "PS03_REDDIT_CLIENT_SECRET", "PS03_REDDIT_USER_AGENT"):
+    os.environ[_var] = ""
 
 BACKEND = Path(__file__).resolve().parents[1]
 FIXTURES = BACKEND / "fixtures"

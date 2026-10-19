@@ -40,10 +40,11 @@ agent / Jev) and live platform providers stubbed honestly behind capability decl
 | Bounded agent (`POST /agent/run`): plan→policy→allowlisted tool loop, step/time budgets, explicit stop reasons | ✅ | Deterministic planner; LLM can later propose actions but never bypass policy (section 16) |
 | React + TypeScript + Cytoscape.js workspace | ✅ | Shapes *and* labels, not color alone; mobile summary-first |
 | Security: SSRF guard, signature validation, prompt-injection-as-data, size/pixel caps | ✅ | See `docs/SECURITY.md` |
-| Live platform connectors, OCR, reverse image search, LLM agent, Jev | ⛔ disabled | Explicit "not configured/access required" — never mocked as real |
+| Live YouTube import + Google Fact Check + Groq/Gemini/OpenRouter LLM adapters | 🔑 key-gated | Code shipped in `services/providers/` + Connectors tab; free keys flip status to `configured`; missing keys stay honestly `not configured` |
+| OCR, reverse image search, Instagram/Facebook, Reddit (approval-gated), Jev | ⛔ disabled/pending | Explicit "not configured/access required" — never mocked as real |
 | Exposure-check module | ⛔ out of MVP | Per section 20, intentionally excluded |
 
-**30 pytest tests pass**, covering the section-21 minimum acceptance gates, the bounded
+**49 pytest tests pass**, covering the section-21 minimum acceptance gates, the bounded
 agent's policy layer (unknown tools, cross-case denial, disabled providers, budgets,
 prompt-injection-as-data), adversarial image/comment fixtures and RBAC isolation.
 
@@ -98,6 +99,11 @@ infrastructure; switch via `PS03_DATABASE_URL` and `PS03_REDIS_URL`.
 
 > 📖 **Step-by-step usage guide (Hinglish): [`docs/USAGE.md`](docs/USAGE.md)** — login,
 > data upload, workflows, graph reading, reviews, agent, exports, API, testing.
+>
+> 🔑 **Free API keys guide (Hinglish): [`docs/REQUIRED_CREDENTIALS.md`](docs/REQUIRED_CREDENTIALS.md)** —
+> Groq/Gemini/OpenRouter, YouTube Data API, Google Fact Check, Instagram, Reddit: exact steps,
+> quotas and env vars. Live adapters ship in `backend/app/services/providers/` and the
+> **Connectors** tab; without keys everything honestly shows `not configured`.
 
 1. Sign in as **Owner**, create a case (guardrails are clamped server-side).
 2. Upload `backend/fixtures/posts.json`, `comments.csv`, `factchecks.json` and the
