@@ -1,0 +1,40 @@
+# PS-03 developer convenience targets.
+.PHONY: help install fixtures test eval run-api run-web seed clean
+
+help:
+	@echo "PS-03 targets:"
+	@echo "  make install    - install backend + frontend dependencies"
+	@echo "  make fixtures   - regenerate synthetic fixture images"
+	@echo "  make test       - run backend pytest suite"
+	@echo "  make eval       - run fixture evaluation harness"
+	@echo "  make run-api    - start FastAPI on :8000"
+	@echo "  make run-web    - start Vite dev server on :5173"
+	@echo "  make seed       - populate a demo case against a running API"
+	@echo "  make clean      - remove caches, local DBs and generated storage"
+
+install:
+	cd backend && pip install -r requirements.txt
+	cd frontend && npm install
+
+fixtures:
+	cd backend && python fixtures/make_fixture_images.py
+
+test:
+	cd backend && python -m pytest tests/ -q
+
+eval:
+	cd backend && python scripts/evaluate.py
+
+run-api:
+	cd backend && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+run-web:
+	cd frontend && npm run dev
+
+seed:
+	cd backend && python scripts/seed_demo.py
+
+clean:
+	rm -rf backend/.pytest_cache backend/**/__pycache__ backend/__pycache__
+	rm -f backend/*.db
+	rm -rf backend/var frontend/dist frontend/tsconfig.tsbuildinfo

@@ -1,0 +1,18 @@
+{
+  "factchecks": [
+    {
+      "claim": "The municipal bridge on River Kosi was damaged after record rainfall on 12 July",
+      "outcome": "refuted",
+      "source": "Example Fact Check Desk — bridge-verify-2026-07 (authorized demo fixture)",
+      "checked_at": "2026-07-14",
+      "note": "Photograph predates the July rainfall; the bridge damage claim is out of context."
+    },
+    {
+      "claim": "Officials have diverted traffic via the eastern ring road",
+      "outcome": "supported",
+      "source": "Municipal traffic advisory 2026-07-12 (authorized demo fixture)",
+      "checked_at": "2026-07-13",
+      "note": "Diversion notice matches the official advisory."
+    }
+  ]
+}

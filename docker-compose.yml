@@ -1,0 +1,69 @@
+# PS-03 full stack — distinct responsibilities per the master prompt.
+# Local dev without Docker works too: SQLite + local storage + in-process runner.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ps03
+      POSTGRES_PASSWORD: ps03-dev-password
+      POSTGRES_DB: ps03
+    ports: ["5432:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ps03"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]  # durable broker storage
+    ports: ["6379:6379"]
+    volumes: ["redisdata:/data"]
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ps03-minio
+      MINIO_ROOT_PASSWORD: ps03-minio-password
+    ports: ["9000:9000", "9001:9001"]
+    volumes: ["miniodata:/data"]
+
+  api:
+    build: ./backend
+    environment:
+      PS03_DATABASE_URL: postgresql+psycopg://ps03:ps03-dev-password@db:5432/ps03
+      PS03_REDIS_URL: redis://redis:6379/0
+      PS03_S3_ENDPOINT: http://minio:9000
+      PS03_STORAGE_DIR: /data/storage
+    ports: ["8000:8000"]
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_started }
+    volumes: ["storagedata:/data/storage"]
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+  worker:
+    build: ./backend
+    environment:
+      PS03_DATABASE_URL: postgresql+psycopg://ps03:ps03-dev-password@db:5432/ps03
+      PS03_REDIS_URL: redis://redis:6379/0
+      PS03_STORAGE_DIR: /data/storage
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_started }
+    volumes: ["storagedata:/data/storage"]
+    # Celery path requires: pip install celery[redis] psycopg[binary] boto3
+    command: celery -A worker.celery_app worker --loglevel=INFO --concurrency=2
+
+  frontend:
+    build: ./frontend
+    ports: ["5173:80"]
+    depends_on: [api]
+
+volumes:
+  pgdata:
+  redisdata:
+  miniodata:
+  storagedata:

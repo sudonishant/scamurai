@@ -1,0 +1,4 @@
+# Autogenerate the initial migration after choosing your database:
+#   alembic revision --autogenerate -m "initial evidence schema"
+#   alembic upgrade head
+# Local/dev convenience uses Base.metadata.create_all on startup instead.
