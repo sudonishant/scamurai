@@ -96,6 +96,9 @@ infrastructure; switch via `PS03_DATABASE_URL` and `PS03_REDIS_URL`.
 
 ## Five-minute walkthrough
 
+> 📖 **Step-by-step usage guide (Hinglish): [`docs/USAGE.md`](docs/USAGE.md)** — login,
+> data upload, workflows, graph reading, reviews, agent, exports, API, testing.
+
 1. Sign in as **Owner**, create a case (guardrails are clamped server-side).
 2. Upload `backend/fixtures/posts.json`, `comments.csv`, `factchecks.json` and the
    images in `backend/fixtures/images/`.
