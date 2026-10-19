@@ -14,15 +14,23 @@ from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+# Support both SCAMURAI_ and legacy PS03_ env vars
+for _k, _v in list(os.environ.items()):
+    if _k.startswith("PS03_"):
+        os.environ.setdefault("SCAMURAI_" + _k[5:], _v)
+    elif _k.startswith("SCAMURAI_"):
+        os.environ.setdefault("PS03_" + _k[9:], _v)
+
+
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="PS03_", env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="SCAMURAI_", env_file=".env", extra="ignore")
 
     environment: str = "development"
-    database_url: str = "sqlite:///./ps03_dev.db"
+    database_url: str = "sqlite:///./scamurai_dev.db"
     # When set, the worker switches from in-process runner to Celery broker config.
     redis_url: str | None = None
     s3_endpoint: str | None = None
-    s3_bucket: str = "ps03-private"
+    s3_bucket: str = "scamurai-private"
     storage_dir: str = str(Path(__file__).resolve().parents[2] / "var" / "storage")
 
     # Auth — dev tokens are demo-only and must be replaced by an IdP/OAuth in deployment.

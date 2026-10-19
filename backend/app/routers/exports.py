@@ -74,7 +74,7 @@ def download(export_id: str, ctx=Depends(require_case()), db: Session = Depends(
     blob = storage.get_object(export.artifact_key)
     return Response(
         blob, media_type=MEDIA_TYPES[export.fmt],
-        headers={"Content-Disposition": f'attachment; filename="ps03-{export_id[:8]}.{export.fmt}"'})
+        headers={"Content-Disposition": f'attachment; filename="scamurai-{export_id[:8]}.{export.fmt}"'})
 
 
 @router.get("/media/{media_id}/raw")

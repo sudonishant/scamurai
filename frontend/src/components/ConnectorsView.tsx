@@ -62,6 +62,32 @@ export default function ConnectorsView({ caseId, role, onChanged }: {
         rakhi jaati hain, browser kabhi unhe touch nahi karta.
       </p>
 
+      <div style={{ background: "#18181b", border: "1px solid #27272a", borderRadius: 8, padding: 14, margin: "14px 0" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 20 }}>⚡</span>
+          <div>
+            <h4 style={{ margin: 0 }}>Model Context Protocol (MCP) Mode</h4>
+            <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>
+              Direct AI Agent Tool Calling (Replaces Proprietary External APIs with zero keys)
+            </div>
+          </div>
+          <span className="badge fact" style={{ marginLeft: "auto" }}>Native MCP Active</span>
+        </div>
+        <p className="muted" style={{ fontSize: 12, marginTop: 10 }}>
+          Instead of configuring commercial API keys (YouTube, Gemini, FactCheck), you can connect Scamurai directly to any AI Agent (Antigravity, Claude Desktop, Cursor) via MCP:
+        </p>
+        <pre style={{ background: "#09090b", padding: 10, borderRadius: 6, fontSize: 12, overflowX: "auto" }}>
+{`# Run Scamurai as an MCP Server:
+python backend/scamurai_mcp.py
+
+# Available MCP Tools:
+• scamurai_analyze_media(image_path)      -> DCT pHash + EXIF GPS extraction
+• scamurai_analyze_comments(comments)     -> Multilingual Hindi/Hinglish NLP
+• scamurai_detect_coordination(posts)     -> Multi-account temporal clustering
+• scamurai_extract_claims(text)           -> Fact-check query propositioning`}
+        </pre>
+      </div>
+
       <h4>Provider status</h4>
       <table>
         <thead><tr><th>Provider</th><th>Status</th><th>Detail</th></tr></thead>
@@ -79,7 +105,7 @@ export default function ConnectorsView({ caseId, role, onChanged }: {
       <h4 style={{ marginTop: 22 }}>YouTube comments import (Data API v3, free key)</h4>
       {!canRun && <p className="badge err">Your role ({role}) cannot run imports.</p>}
       {cap("youtube") && !cap("youtube")!.configured && (
-        <p className="badge warn">PS03_YOUTUBE_API_KEY set nahi hai — server .env me key daalo, phir ye section live ho jayega.</p>
+        <p className="badge warn">SCAMURAI_YOUTUBE_API_KEY set nahi hai — server .env me key daalo, phir ye section live ho jayega.</p>
       )}
       <div style={{ display: "flex", gap: 8 }}>
         <input
@@ -103,7 +129,7 @@ export default function ConnectorsView({ caseId, role, onChanged }: {
 
       <h4 style={{ marginTop: 22 }}>Google Fact Check search (free Claim Search API)</h4>
       {cap("factcheck") && !cap("factcheck")!.configured && (
-        <p className="badge warn">PS03_GOOGLE_FACTCHECK_API_KEY set nahi hai.</p>
+        <p className="badge warn">SCAMURAI_GOOGLE_FACTCHECK_API_KEY set nahi hai.</p>
       )}
       <div style={{ display: "flex", gap: 8 }}>
         <input

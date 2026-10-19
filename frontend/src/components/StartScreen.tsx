@@ -43,7 +43,7 @@ export default function StartScreen({ onOpen }: Props) {
 
   return (
     <div className="start">
-      <h1>PS-03 · Coordinated Disinformation Detection</h1>
+      <h1>Scamurai · Coordinated Disinformation Detection</h1>
       <p className="muted">
         Evidence-first investigation workspace. Every conclusion answers:
         <b> what is established, what is a signal, and what remains unknown.</b>

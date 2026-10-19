@@ -102,8 +102,9 @@ export default function EvidenceDrawer(
 }
 
 async function requestEvidence(caseId: string, id: string): Promise<EvidenceMeta> {
+  const token = localStorage.getItem("scamurai.devToken") || localStorage.getItem("ps03.devToken");
   const res = await fetch(`/api/v1/cases/${caseId}/evidence/${id}`, {
-    headers: { Authorization: `Bearer ${localStorage.getItem("ps03.devToken")}` },
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
   });
   if (!res.ok) throw new Error("not an evidence record");
   return res.json();

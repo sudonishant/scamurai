@@ -27,13 +27,13 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 # string, so keep those loggers above INFO to prevent credential leakage into logs.
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
-log = logging.getLogger("ps03")
+log = logging.getLogger("scamurai")
 
 SEED_USERS = [
-    ("owner@ps03.local", "Case Owner", "dev-token-owner"),
-    ("analyst@ps03.local", "Analyst", "dev-token-analyst"),
-    ("reviewer@ps03.local", "Reviewer", "dev-token-reviewer"),
-    ("viewer@ps03.local", "Read-only Viewer", "dev-token-viewer"),
+    ("owner@scamurai.local", "Case Owner", "dev-token-owner"),
+    ("analyst@scamurai.local", "Analyst", "dev-token-analyst"),
+    ("reviewer@scamurai.local", "Reviewer", "dev-token-reviewer"),
+    ("viewer@scamurai.local", "Read-only Viewer", "dev-token-viewer"),
 ]
 
 
@@ -47,7 +47,7 @@ def seed_users() -> None:
 
 def create_app() -> FastAPI:
     app = FastAPI(
-        title="PS-03 Coordinated Disinformation Detection System",
+        title="Scamurai Coordinated Disinformation Detection System",
         version=__version__,
         summary="Evidence-first Maltego-style investigation workspace (import-first build).",
     )
@@ -78,7 +78,7 @@ def create_app() -> FastAPI:
         init_db()
         seed_users()
         reconcile_orphans()
-        log.info("PS-03 started (env=%s, db=%s, ocr=%s, reverse=%s, llm=%s)",
+        log.info("Scamurai started (env=%s, db=%s, ocr=%s, reverse=%s, llm=%s)",
                  settings.environment, settings.database_url.split("///")[-1],
                  settings.ocr_provider or "off", settings.reverse_search_provider or "off",
                  settings.llm_provider or "off")

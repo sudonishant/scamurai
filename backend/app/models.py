@@ -63,7 +63,7 @@ class Case(Base, TimestampMixin):
     languages: Mapped[str] = mapped_column(String(300), default="[]")       # JSON list
     retention_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
     limits: Mapped[str] = mapped_column(Text, default="{}")                 # JSON policy clamp
-    schema_version: Mapped[str] = mapped_column(String(40), default="ps03-0.1")
+    schema_version: Mapped[str] = mapped_column(String(40), default="scamurai-0.1")
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
 
     memberships: Mapped[list["CaseMembership"]] = relationship(cascade="all, delete-orphan")

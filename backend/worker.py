@@ -23,7 +23,7 @@ except ImportError:  # optional dependency until Redis/Celery is deployed
     Celery = None  # type: ignore[assignment]
 
 if Celery and settings.redis_url:
-    celery_app = Celery("ps03", broker=settings.redis_url, backend=settings.redis_url)
+    celery_app = Celery("scamurai", broker=settings.redis_url, backend=settings.redis_url)
     celery_app.conf.update(
         task_acks_late=True,                 # redeliver if a worker dies
         task_reject_on_worker_lost=True,

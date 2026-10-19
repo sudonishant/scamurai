@@ -59,10 +59,11 @@ def create_case(body: CaseCreate, db: Session = Depends(get_db),
     db.flush()
     db.add(CaseMembership(case_id=case.id, user_id=user.id, role="owner"))
     for email in body.member_emails:
-        other = db.scalar(select(User).where(User.email == email))
+        norm_email = email.replace("@ps03.local", "@scamurai.local")
+        other = db.scalar(select(User).where((User.email == email) | (User.email == norm_email)))
         if other:
-            db.add(CaseMembership(case_id=case.id, user_id=other.id,
-                                  role=body.member_roles.get(email, "viewer")))
+            m_role = body.member_roles.get(email) or body.member_roles.get(norm_email, "viewer")
+            db.add(CaseMembership(case_id=case.id, user_id=other.id, role=m_role))
     record(db, user.id, "case.create", "case", case.id, case.id, {"title": case.title})
     db.commit()
     return _serialize_case(case, "owner")

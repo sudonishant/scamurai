@@ -1,4 +1,4 @@
-# PS-03 — Social Media Coordinated Disinformation Detection System
+# Scamurai — Social Media Coordinated Disinformation Detection System
 
 ![Python](https://img.shields.io/badge/Python-3.13-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688)

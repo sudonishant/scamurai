@@ -25,7 +25,7 @@ from . import storage, graph
 from .jobs import JobContext
 from .findings import create_finding
 
-TOOL_VERSION = "ps03-local-v0.1"
+TOOL_VERSION = "scamurai-local-v0.1"
 
 
 def _analysis_run(ctx: JobContext, tool: str, parameters: dict,

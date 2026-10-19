@@ -1,8 +1,8 @@
-# PS-03 developer convenience targets.
+# Scamurai developer convenience targets.
 .PHONY: help install fixtures test eval run-api run-web web seed clean
 
 help:
-	@echo "PS-03 targets:"
+	@echo "Scamurai targets:"
 	@echo "  make install    - install backend + frontend dependencies"
 	@echo "  make fixtures   - regenerate synthetic fixture images"
 	@echo "  make test       - run backend pytest suite"

@@ -29,9 +29,9 @@ from ..config import get_settings
 from ..database import SessionLocal
 from ..models import Job, JobEvent, utcnow
 
-log = logging.getLogger("ps03.jobs")
+log = logging.getLogger("scamurai.jobs")
 settings = get_settings()
-POOL = ThreadPoolExecutor(max_workers=8, thread_name_prefix="ps03-worker")
+POOL = ThreadPoolExecutor(max_workers=8, thread_name_prefix="scamurai-worker")
 
 
 # --------------------------------------------------------------------- helpers
