@@ -143,6 +143,20 @@ npm run dev
 | Reviewer | `dev-token-reviewer` | Findings review workflow |
 | Viewer | `dev-token-viewer` | Read-only |
 
+### Model Context Protocol (MCP) Server
+
+Scamurai provides a native MCP server for AI coding assistants and autonomous agents (Antigravity, Claude Desktop, Cursor), enabling direct evidence extraction and disinformation analysis without external API keys:
+
+```bash
+python backend/scamurai_mcp.py
+```
+
+**Available MCP Tools:**
+- `scamurai_analyze_media`: Extract SHA-256, DCT pHash, and EXIF GPS coordinates from suspect images.
+- `scamurai_analyze_comments`: Multilingual (Hindi/English/Hinglish) comment NLP classification and span detection.
+- `scamurai_detect_coordination`: Temporal clustering and lexical repetition analysis across multiple accounts.
+- `scamurai_extract_claims`: Decompose post text into verifiable propositions and fact-check search queries.
+
 ### Docker (full stack)
 
 ```bash
