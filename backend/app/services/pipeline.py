@@ -43,17 +43,35 @@ def _analysis_run(ctx: JobContext, tool: str, parameters: dict,
 # --------------------------------------------------------------------- 1. imports / URLs
 def import_pipeline(ctx: JobContext) -> dict:
     db = ctx.db
-    inputs = db.scalars(select(Input).where(Input.case_id == ctx.case_id)).all()
+    requested_ids = ctx.parameters.get("input_ids") or []
+    query = select(Input).where(Input.case_id == ctx.case_id)
+    if requested_ids:
+        query = query.where(Input.id.in_(requested_ids))
+    inputs = db.scalars(query.order_by(Input.created_at, Input.id)).all()
+    url_inputs = [inp for inp in inputs if inp.kind == "url"]
+    seed_limit = ctx.limits["max_seed_urls"]
+    if len(url_inputs) > seed_limit:
+        ctx.limit(f"Seed URL limit reached; processing at most {seed_limit} URL inputs.")
+    url_inputs = url_inputs[:seed_limit]
     run = _analysis_run(ctx, "import_pipeline", {"inputs": len(inputs)})
     limitations: list[str] = []
     fetched = 0
-    for inp in inputs:
+    new_entities_created = 0
+    fetch_attempts = 0
+    fetch_limit = ctx.limits["max_source_fetches"]
+    entity_limit = ctx.limits["max_new_entities"]
+    for inp in url_inputs:
         ctx.checkpoint()
-        if inp.kind != "url":
-            continue
+        if new_entities_created >= entity_limit:
+            ctx.limit(f"New entity limit reached; stopped after {new_entities_created} entities.")
+            break
+        if fetch_attempts >= fetch_limit:
+            ctx.limit(f"Source fetch limit reached; stopped after {fetch_attempts} attempts.")
+            break
         payload = json.loads(inp.payload)
         url = payload.get("url", "")
         ctx.stage(f"fetching {url[:60]}")
+        fetch_attempts += 1
         result = connectors.fetch_permitted_source(url)
         db.add(SourceAccess(
             case_id=ctx.case_id, input_id=inp.id, provider=result.provider,
@@ -71,12 +89,15 @@ def import_pipeline(ctx: JobContext) -> dict:
             db.flush()
             graph.evidence_node(db, evidence)
             fetched += 1
+            new_entities_created += 1
         else:
             limitations.append(f"{url}: {result.outcome} — {result.detail}")
             inp.status = result.outcome
     run.status = "completed"
     run.ended_at = utcnow()
-    return {"counts": {"sources_fetched": fetched},
+    return {"counts": {"sources_fetched": fetched,
+                        "source_fetch_attempts": fetch_attempts,
+                        "new_entities_created": new_entities_created},
             "limitations": limitations,
             "outcome": "partial" if limitations else "complete"}
 

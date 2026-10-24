@@ -1,9 +1,10 @@
 # Scamurai developer convenience targets.
-.PHONY: help install fixtures test eval run-api run-web web clean
+.PHONY: help install db-upgrade fixtures test eval run-api run-web web clean
 
 help:
 	@echo "Scamurai targets:"
 	@echo "  make install    - install backend + frontend dependencies"
+	@echo "  make db-upgrade - apply Alembic migrations to the configured database"
 	@echo "  make fixtures   - regenerate isolated QA fixture images"
 	@echo "  make test       - run backend pytest suite"
 	@echo "  make eval       - run fixture evaluation harness"
@@ -15,6 +16,9 @@ help:
 install:
 	cd backend && pip install -r requirements.txt
 	cd frontend && npm install
+
+db-upgrade:
+	cd backend && alembic upgrade head
 
 fixtures:
 	cd backend && python fixtures/make_fixture_images.py

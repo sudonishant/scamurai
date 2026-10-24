@@ -5,6 +5,7 @@ import json
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..config import get_settings
@@ -12,6 +13,7 @@ from ..database import get_db
 from ..models import (
     AuditEvent, Case, CaseMembership, EvidenceRecord, Input, Post, SourceAccess, User,
 )
+from ..policies import clamp_case_limits
 from ..registry import POST
 from ..schemas import CapabilityOut, CaseCreate, CaseOut, InputOut, TextInputCreate, UrlInputCreate, UserOut
 from ..security import (
@@ -44,12 +46,8 @@ def list_users(db: Session = Depends(get_db), _: User = Depends(get_current_user
 @router.post("/cases", response_model=CaseOut, status_code=201)
 def create_case(body: CaseCreate, db: Session = Depends(get_db),
                 user: User = Depends(get_current_user)):
-    # Policy guardrails are clamped server-side even if the client asks for more.
-    defaults = {"max_seed_urls": settings.max_seed_urls, "max_depth": settings.max_depth,
-                "max_new_entities": settings.max_new_entities,
-                "max_source_fetches": settings.max_source_fetches,
-                "run_deadline_seconds": settings.run_deadline_seconds}
-    clamped = {**defaults, **body.limits}
+    # Clients may tighten policy, but cannot raise deployment-configured ceilings.
+    clamped = clamp_case_limits(body.limits, settings)
     case = Case(
         title=body.title, purpose=body.purpose,
         allowed_sources=json.dumps(body.allowed_sources),
@@ -158,13 +156,34 @@ async def upload(
     raw = await file.read()
     if len(raw) > settings.max_upload_bytes:
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Upload exceeds case limit")
+    if kind not in {"image", "csv", "json"}:
+        raise HTTPException(422, "Unsupported upload kind")
     filename = sanitize_upload_filename(file.filename)
+    content_digest = storage.sha256_hex(raw)
+    request_digest = storage.sha256_hex(
+        "\0".join((kind, content_digest, filename, meta)).encode("utf-8"))
+    idempotency_key = f"upload:v1:{request_digest}"
+    existing = db.scalar(select(Input).where(
+        Input.case_id == ctx.case.id, Input.idempotency_key == idempotency_key))
+    if existing:
+        return _serialize_input(db, existing)
+
     inp = Input(case_id=ctx.case.id, kind=kind, filename=filename,
                 content_type=file.content_type, byte_length=len(raw),
                 payload=json.dumps({"meta": meta}), created_by=ctx.user.id,
-                idempotency_key=f"upload:{storage.sha256_hex(raw)}:{filename}")
+                idempotency_key=idempotency_key)
     db.add(inp)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError:
+        # A concurrent identical retry may win the unique-key race after our
+        # initial lookup. Roll back this request's transaction and replay it.
+        db.rollback()
+        existing = db.scalar(select(Input).where(
+            Input.case_id == ctx.case.id, Input.idempotency_key == idempotency_key))
+        if existing:
+            return _serialize_input(db, existing)
+        raise
     try:
         if kind == "image":
             mime = validate_image_signature(raw)
@@ -201,8 +220,6 @@ async def upload(
             summary = importer.import_comment_rows(
                 db, ctx.case.id, ctx.user.id, rows, json.loads(meta or "{}"), inp.id)
             inp.status = f"comments_imported:{summary['comments_created']}"
-        else:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Unsupported upload kind")
     except (ValueError, json.JSONDecodeError) as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc))
     record(db, ctx.user.id, "input.upload", "input", inp.id, ctx.case.id,

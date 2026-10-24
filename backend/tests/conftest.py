@@ -49,12 +49,15 @@ def image_dir():
 @pytest.fixture()
 def client():
     from fastapi.testclient import TestClient
-    from app.database import Base, engine
+    from sqlalchemy import text
+    from app.database import Base, engine, upgrade_db
     from app.main import create_app, seed_users
     from app.services.jobs import reconcile_orphans
 
     Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
+    with engine.begin() as connection:
+        connection.execute(text("DROP TABLE IF EXISTS alembic_version"))
+    upgrade_db()
     seed_users()
     reconcile_orphans()
     app = create_app()

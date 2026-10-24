@@ -30,6 +30,14 @@ services:
     ports: ["9000:9000", "9001:9001"]
     volumes: ["miniodata:/data"]
 
+  migrate:
+    build: ./backend
+    environment:
+      SCAMURAI_DATABASE_URL: postgresql+psycopg://scamurai:scamurai-dev-password@db:5432/scamurai
+    depends_on:
+      db: { condition: service_healthy }
+    command: alembic upgrade head
+
   api:
     build: ./backend
     environment:
@@ -40,6 +48,7 @@ services:
     ports: ["8000:8000"]
     depends_on:
       db: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
       redis: { condition: service_started }
     volumes: ["storagedata:/data/storage"]
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
@@ -52,6 +61,7 @@ services:
       SCAMURAI_STORAGE_DIR: /data/storage
     depends_on:
       db: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
       redis: { condition: service_started }
     volumes: ["storagedata:/data/storage"]
     # Celery path requires: pip install celery[redis] psycopg[binary] boto3

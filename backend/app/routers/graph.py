@@ -1,14 +1,17 @@
 """Graph workspace, shortest known evidence path and account comparison."""
 from __future__ import annotations
 
+import json
 from itertools import combinations
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..config import get_settings
 from ..database import get_db
 from ..models import Account, GraphEdge, GraphNode, Post
+from ..policies import clamp_run_limits
 from ..registry import ACCOUNT
 from ..schemas import GraphOut, PathRequest
 from ..security import require_case
@@ -26,9 +29,10 @@ def get_graph(relation_types: str | None = None,
 
 @router.post("/graph/path")
 def shortest_path(body: PathRequest, ctx=Depends(require_case()), db: Session = Depends(get_db)):
+    case_limits = clamp_run_limits(json.loads(ctx.case.limits), {}, get_settings())
     path = graph_svc.shortest_known_evidence_path(
         db, ctx.case.id, body.source_node_id, body.target_node_id,
-        body.max_depth, body.max_nodes)
+        min(body.max_depth, case_limits["max_depth"]), body.max_nodes)
     return {
         "edges": path,
         "disclaimer": "Navigation aid only — a path does not prove shared ownership or intent.",

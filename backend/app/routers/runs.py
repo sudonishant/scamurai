@@ -10,8 +10,10 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..config import get_settings
 from ..database import SessionLocal, get_db
-from ..models import Comment, Job
+from ..models import Comment, Input, Job
+from ..policies import clamp_run_limits
 from ..registry import TRANSFORMS
 from ..schemas import JobOut, RunCreate, TransformCreate
 from ..security import require_case
@@ -43,18 +45,30 @@ def create_run(body: RunCreate, ctx=Depends(require_case({"analyst", "owner"})),
     if body.workflow not in pipeline.WORKFLOWS:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Unknown workflow")
     case_limits = json.loads(ctx.case.limits)
-    if len(body.input_ids) > case_limits.get("max_seed_urls", 5) and body.input_ids:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
-                            "Seed input count exceeds case policy limit")
+    effective_limits = clamp_run_limits(case_limits, body.limits, get_settings())
+    if len(set(body.input_ids)) != len(body.input_ids):
+        raise HTTPException(422,
+                            "Run input IDs must be unique")
+    owned_inputs = []
+    if body.input_ids:
+        owned_inputs = db.scalars(select(Input).where(
+            Input.case_id == ctx.case.id, Input.id.in_(body.input_ids))).all()
+        if {item.id for item in owned_inputs} != set(body.input_ids):
+            raise HTTPException(422,
+                                "Run input IDs must belong to this case")
+    url_seed_count = sum(item.kind == "url" for item in owned_inputs)
+    if url_seed_count > effective_limits["max_seed_urls"]:
+        raise HTTPException(422,
+                            "Seed URL count exceeds case policy limit")
     run_id = str(uuid.uuid4())
     job, created = create_or_get_job(
         db, ctx.case.id, kind=body.workflow,
-        parameters={"input_ids": body.input_ids, "limits": body.limits,
+        parameters={"input_ids": body.input_ids, "limits": effective_limits,
                     "allowed_provider_ids": body.allowed_provider_ids},
         client_idempotency_key=body.client_idempotency_key, run_id=run_id)
     if created:
         submit(job.id, pipeline.WORKFLOWS[body.workflow])
-    return {"run_id": run_id, "job_id": job.id, "replayed": not created}
+    return {"run_id": job.run_id, "job_id": job.id, "replayed": not created}
 
 
 @router.get("/jobs/{job_id}", response_model=JobOut)

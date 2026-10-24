@@ -76,6 +76,7 @@ Requirements: **Python 3.13+** and **Node.js `^20.19` or `>=22.12`** (Vite 8 req
 cd backend
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+alembic upgrade head
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 # Frontend — terminal 2
@@ -92,6 +93,7 @@ Convenience targets:
 
 ```bash
 make install
+make db-upgrade   # apply schema revisions before the first local API start
 make run-api       # terminal 1
 make run-web       # terminal 2
 ```
@@ -102,6 +104,9 @@ Docker Compose remains available for the PostgreSQL/Redis/MinIO development stac
 cp .env.example .env
 docker compose up --build
 ```
+
+Compose runs the one-shot Alembic migration service before starting the API and worker.
+For upgrading existing databases safely, see [`docs/DATABASE_MIGRATIONS.md`](docs/DATABASE_MIGRATIONS.md).
 
 ### Development roles
 

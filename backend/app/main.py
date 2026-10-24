@@ -16,7 +16,7 @@ from sqlalchemy import select
 
 from . import __version__
 from .config import get_settings
-from .database import SessionLocal, init_db
+from .database import SessionLocal
 from .models import User
 from .routers import agent, analytics, cases, comments, connectors, exports, graph, media, osint, runs
 from .services.jobs import reconcile_orphans
@@ -77,7 +77,6 @@ def create_app() -> FastAPI:
 
     @app.on_event("startup")
     def _startup():
-        init_db()
         seed_users()
         reconcile_orphans()
         log.info("Scamurai started (env=%s, db=%s, ocr=%s, reverse=%s, llm=%s)",

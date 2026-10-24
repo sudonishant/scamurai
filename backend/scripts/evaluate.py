@@ -20,8 +20,9 @@ os.environ.setdefault("SCAMURAI_DATABASE_URL",
 os.environ.setdefault("SCAMURAI_STORAGE_DIR", str(pathlib.Path(tempfile.mkdtemp()) / "store"))
 
 from fastapi.testclient import TestClient  # noqa: E402
+from sqlalchemy import text  # noqa: E402
 
-from app.database import Base, engine  # noqa: E402
+from app.database import Base, engine, upgrade_db  # noqa: E402
 from app.main import create_app, seed_users  # noqa: E402
 
 FIXTURES = pathlib.Path(__file__).resolve().parents[1] / "fixtures"
@@ -49,7 +50,9 @@ def main() -> None:
         import subprocess, sys
         subprocess.run([sys.executable, str(FIXTURES / "make_fixture_images.py")], check=True)
     Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
+    with engine.begin() as connection:
+        connection.execute(text("DROP TABLE IF EXISTS alembic_version"))
+    upgrade_db()
     seed_users()
     client = TestClient(create_app())
     headers = {"Authorization": "Bearer dev-token-owner"}
