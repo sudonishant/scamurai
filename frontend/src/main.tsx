@@ -89,7 +89,7 @@ function Login({ onAuth }: { onAuth: () => void }) {
                 <span><b>{role.name}</b><small>{role.detail}</small></span><Icon name="arrow" size={15} />
               </button>
             ))}</div>
-            <p className="auth-note"><Icon name="info" size={14} /> Live API only. No synthetic demo, offline evidence fallback or fabricated source result.</p>
+            <p className="auth-note"><Icon name="info" size={14} /> Full investigative workspace with live FastAPI backend or browser sandbox for static GitHub Pages preview.</p>
           </div>
           <div className="login-proof">
             <div><Icon name="database" /><span><b>Evidence preserved</b><small>Hash-snapshotted source observations</small></span></div>

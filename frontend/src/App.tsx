@@ -3,7 +3,7 @@ import StartScreen from "./components/StartScreen";
 import Workspace from "./components/Workspace";
 import Icon from "./components/Icon";
 import MatrixBackdrop from "./components/MatrixBackdrop";
-import { getApiUrl, setApiUrl } from "./lib/api";
+import { getApiUrl, isSandboxActive, setApiUrl } from "./lib/api";
 
 interface Props { onLogout: () => void }
 
@@ -61,7 +61,7 @@ function TopBar({ onLogout, onHome }: { onLogout: () => void; onHome?: () => voi
       <span className="product-label">OSINT INVESTIGATION LAB</span>
       <span className="spacer" />
       <button className="connection-pill live" onClick={() => setShowConfig(true)}>
-        <span className="live-dot" />{getApiUrl() ? "Remote live API" : "Same-origin live API"}<Icon name="settings" size={14} />
+        <span className={`live-dot ${isSandboxActive() ? "sandbox" : ""}`} />{getApiUrl() ? "Remote live API" : isSandboxActive() ? "Browser sandbox" : "Live API"}<Icon name="settings" size={14} />
       </button>
       {onHome && <button className="icon-button" onClick={onHome} title="All investigations"><Icon name="home" /></button>}
       <button className="btn btn-quiet" onClick={onLogout}><Icon name="logout" size={16} /> Switch role</button>
