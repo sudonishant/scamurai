@@ -227,10 +227,8 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
-      - name: Add Pages marker and fallback
-        run: |
-          touch frontend/dist/.nojekyll
-          cp frontend/dist/index.html frontend/dist/404.html
+      - name: Add Pages marker
+        run: touch frontend/dist/.nojekyll
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

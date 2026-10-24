@@ -145,16 +145,9 @@ async function request<T>(path: string, init: RequestInit = {}, fallbackHandler?
     return await fallbackHandler();
   }
 
-  try {
-    const res = await liveFetch(path, init);
-    if (res.status === 204) return undefined as T;
-    return await res.json() as T;
-  } catch (error) {
-    if (fallbackHandler) {
-      return await fallbackHandler();
-    }
-    throw error;
-  }
+  const res = await liveFetch(path, init);
+  if (res.status === 204) return undefined as T;
+  return await res.json() as T;
 }
 
 export const api = {
