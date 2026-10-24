@@ -6,7 +6,7 @@ of perfect security.
 
 ## Authentication & authorization
 
-- Development bearer tokens are demo-only (`dev-token-*`). Deployment must replace the
+- Development bearer tokens (`dev-token-*`) are for local development only. Deployment must replace the
   `get_current_user` dependency with an external identity provider/OAuth.
 - **RBAC**: role rank `owner > analyst > reviewer > viewer`; writes require
   analyst+, reviews require reviewer+, exports require analyst+.
@@ -18,13 +18,17 @@ of perfect security.
 
 ## SSRF defense (`security.assert_public_url`, connectors)
 
-- Only `http`/`https` schemes; DNS resolution checked before every fetch.
-- Loopback, RFC1918, link-local (incl. `169.254.169.254`), unique-local IPv6 and cloud
-  metadata hostnames are blocked.
-- Redirects are re-validated per hop via an httpx request hook; response size, timeout
-  and content-type are bounded.
+- Only `http`/`https` schemes; credentialed URLs are rejected and DNS results are checked before each hop.
+- Every non-global destination is rejected, including loopback, RFC1918, CGNAT, link-local,
+  unique-local IPv6, mapped IPv4, reserved ranges and cloud metadata destinations.
+- Redirects are followed manually (bounded count) and every target is revalidated; response
+  size, timeout and content type are bounded.
 - Platform hosts without a configured connector return `not_configured`/`access_required`
   preflight records instead of being fetched.
+- **Residual risk:** validation-time DNS checks do not pin the address used by the subsequent
+  socket connection and therefore do not alone eliminate DNS-rebinding/TOCTOU attacks. Use
+  network-layer egress restrictions and connection-level DNS pinning where feasible for any
+  internet-facing or multi-tenant deployment.
 
 ## Untrusted content & prompt injection
 
@@ -45,6 +49,8 @@ of perfect security.
 - Magic-byte signature validation, extension is not trusted (`validate_image_signature`).
 - Bounded request size (`413`), Pillow pixel-count cap, bounded memory during decode.
 - Executable content is never served or executed; object keys are server-generated.
+- Browser media previews retrieve protected bytes with the bearer token and use revocable
+  local object URLs rather than unauthenticated `<img>` endpoint URLs.
 
 ## Data protection
 
@@ -74,6 +80,8 @@ of perfect security.
 - [ ] Replace dev tokens with an IdP; rotate `SCAMURAI_JWT_SECRET`.
 - [ ] Run on PostgreSQL with Alembic migrations; back up and test restoration.
 - [ ] Enable TLS, private buckets, least-privilege service accounts.
+- [ ] Enforce outbound egress policy; add connection-level DNS pinning where feasible and
+      test redirect/rebinding defenses against the actual deployment network.
 - [ ] DPDP Act / 2025 Rules and jurisdiction-specific privacy review before deployment.
 - [ ] Legal review of evidence handling; do not label PDFs as certified evidence.
 - [ ] Provider contracts (quota, retention, data handling) verified before enabling any

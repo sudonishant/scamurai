@@ -1,339 +1,222 @@
-# Scamurai — Social Media Coordinated Disinformation Detection System
+# Scamurai — evidence-first coordinated-disinformation investigation
 
-![Python](https://img.shields.io/badge/Python-3.13-blue)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688)
-![React](https://img.shields.io/badge/React-19-61dafb)
-![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6)
-![Tests](https://img.shields.io/badge/tests-49%20passing-2ea44f)
-![Status](https://img.shields.io/badge/status-Milestone%201%20complete-success)
+Scamurai is a FastAPI + React workspace for authorized analysts who need to collect public-source evidence, examine narrative propagation, review possible coordination, inspect media, and preserve a defensible audit trail.
 
-A browser-based, **evidence-first** Maltego-style investigation workspace. An authorized
-analyst submits post URLs, public account references, images, text claims, and authorized
-comment exports; the system preserves evidence, finds related content, detects patterns
-consistent with possible coordination, assesses claims, and explains every conclusion on
-an interactive **typed graph** with exportable, hash-manifested reports.
+It is deliberately **an investigation tool, not an accusation engine**:
 
-The product is deliberately **an investigation tool, not an accusation engine**. Every
-output separates:
+- **Established observations** are separated from similarities, hypotheses, and unknowns.
+- “Earliest observed” means earliest **inside the collected case corpus**, not platform-wide origin.
+- A timing or repetition score is not a bot probability, maliciousness score, or common-ownership finding.
+- A missing API result, inaccessible post, absent metadata field, or empty fact-check response is not proof that something does not exist.
+- The product runtime is **live-only**. Authentication, provider, and transport failures remain visible; they never activate synthetic evidence or an offline demo. Synthetic fixtures are confined to automated tests and evaluation.
 
-1. **What is established** — source-supported facts (`fact` edges, solid green)
-2. **What is a signal/hypothesis** — algorithmic similarity, review candidates (`similarity` / `hypothesis` edges, dashed/dotted)
-3. **What remains unknown** — insufficient evidence, inaccessible sources (never silently filled)
+## Implemented capabilities
 
-> Shared content is never proof of common account ownership.
-> Coordination is never automatically malicious.
-> An inaccurate claim never establishes deliberate deception.
-
----
-
-## Table of contents
-
-- [Feature matrix](#feature-matrix)
-- [Architecture](#architecture)
-- [Quickstart](#quickstart)
-- [Configuration](#configuration)
-- [Enabling free live providers](#enabling-free-live-providers)
-- [API reference](#api-reference)
-- [Five-minute walkthrough](#five-minute-walkthrough)
-- [Project layout](#project-layout)
-- [Testing and evaluation](#testing-and-evaluation)
-- [Documentation](#documentation)
-- [Honest limitations](#honest-limitations-read-before-demoing)
-
----
-
-## Feature matrix
-
-Milestone 1 in full, plus the deterministic, credential-free parts of Milestones 2–4 and a
-policy-bounded agent (Milestone 5). Live external providers are real adapters gated behind
-explicit capability declarations — **never mocked as collected evidence**.
-
-| Area | Status | Notes |
+| Area | What is real in this repository | Important boundary |
 |---|---|---|
-| Cases, RBAC (owner/analyst/reviewer/viewer), case isolation | ✅ | Membership checked on every read/write; unknown case → 404, never 403 |
-| Authorized CSV/JSON imports, multipart image upload | ✅ | Raw snapshots preserved before normalization; MIME validated by signature, not extension |
-| Evidence model + typed graph (15 relationship types, 4 derivation classes) | ✅ | PostgreSQL-ready schema; SQLite for zero-infra local dev |
-| Jobs: lifecycle/outcome separation, SSE, cancel, idempotency, crash reconciliation | ✅ | In-process runner locally; Celery contract in `worker.py` |
-| Image pipeline: SHA-256, DCT pHash, sliding-window region match, EXIF GPS | ✅ | 5 honest match categories incl. explicit `no_match` |
-| Comments: dedup, coverage honesty, multilabel en/hi/Hinglish rules, spans | ✅ | Uncalibrated label declared on every result |
-| Coordination: episode features, rarity, timing-precision rules, alternatives | ✅ | Review candidates only — no fabricated probabilities |
-| Claims: proposition extraction, query-plan generation, imported fact-check matching | ✅ | Live Google Fact Check adapter optional; no-result ≠ false |
-| Photo-to-location: metadata-reported vs insufficient, no invented places | ✅ | Vision/OCR path stays disabled until a provider is configured |
-| Findings + reviewer workflow + full audit trail | ✅ | Reversible, append-only review states |
-| Exports: PDF (Unicode/DejaVu), HTML, CSV, JSON + redaction + SHA-256 manifest | ✅ | Expiring signed-style links; CSV-injection guarded |
-| Bounded agent `POST /agent/run`: plan → policy → allowlisted tool loop | ✅ | Step/time budgets, explicit stop reasons, prompt-injection treated as data |
-| React + TypeScript + Cytoscape.js workspace (8 tabs) | ✅ | Shapes *and* labels, not color alone; mobile summary-first |
-| Security: SSRF guard, signature validation, size/pixel caps, log-secret hygiene | ✅ | See [`docs/SECURITY.md`](docs/SECURITY.md) |
-| **Live** YouTube comments import, Google Fact Check, Groq/Gemini/OpenRouter LLM | 🔑 key-gated | Shipped in `services/providers/` + Connectors tab; free keys; missing key → honest `not configured` |
-| OCR, reverse image search, Instagram/Facebook, Reddit (approval-gated), Jev | ⛔ disabled/pending | Explicit statuses — import path remains available meanwhile |
-| Exposure-check module | ⛔ out of MVP | Intentionally excluded per master-prompt section 20 |
+| Case investigation | Case-scoped RBAC, evidence records, typed graph, review workflow, audit events, exports | Development tokens must be replaced before deployment |
+| Authorized imports | Public URL/text intake; JSON/CSV/signature-checked image upload; raw snapshots and hashes | Import authorization and platform terms remain the operator’s responsibility |
+| Public social source | Bounded Mastodon public-hashtag collection through the selected instance’s official API | One page, no private/unlisted statuses; instances may disable public preview |
+| YouTube and fact checks | Official YouTube commentThreads and Google Fact Check adapters | Require server-side API keys; quota/access failures remain visible |
+| Public-infrastructure OSINT | DNS-over-HTTPS, IANA-bootstrapped RDAP, bounded web metadata, crt.sh CT observations, Wayback availability | Passive/bounded research only; no scanning, breach lookup, login bypass, or private identity resolution |
+| Narratives | TF-IDF/cosine similarity clusters, representative posts, timelines, observed propagation order, cross-account similarity | Similarity is not proof of orchestration; clustering input is bounded |
+| Account behavior | Transparent duplicate-text, timing, regularity, and posting-rate indicators with evidence coverage | Explicitly **not calibrated bot probability** |
+| Network analysis | Account links derived from the evidence graph, fact/hypothesis edge separation, observed connected components | No inferred shared identity or intent |
+| Geospatial analysis | Aggregated points from supplied metadata/authorized imports, timelines, baseline/anomaly review cues | Not live device tracking; missing location data is a coverage limitation |
+| Early warnings | Explainable narrative-acceleration and geo-spike attention rules with evidence IDs and recommended review action | Attention scores are triage rules, not threat probabilities |
+| Media screening | SHA-256, pHash, selected metadata, possible provenance-marker bytes, bounded pixel/JPEG residual measurements | C2PA byte markers are not cryptographic validation; residuals are not manipulation verdicts |
+| Optional synthetic-image model | A configured local Hugging Face image classifier can return raw labels and an uncalibrated label-aggregation score | No score when no model is configured; model/threshold validation is still required |
+| Existing analysis pipelines | Image matching, comments, coordination candidates, claims, metadata-first location findings, bounded agent, jobs and exports | See method notes and per-result limitations |
 
----
+### Not claimed or silently simulated
 
-## Architecture
+- There is **no platform-wide firehose or continuous real-time monitor**. Analytics are computed on demand from the currently collected case corpus.
+- There is no built-in deterministic deepfake verdict or calibrated bot/deepfake confidence.
+- Video/deepfake analysis is not implemented merely by running an image classifier. Unsupported media remains unsupported.
+- Instagram/Facebook private or restricted content, Reddit approval-gated access, OCR, and reverse image search are not represented as working when unconfigured.
+- Content Credentials/provenance and content-based synthetic-media detection answer different questions. Absence of either is not evidence of authenticity or manipulation.
 
-```
-┌──────────────────────────── Browser (React 19 + TS + Cytoscape.js) ───────────────────────────┐
-│  StartScreen · Workspace (Graph · List · Comments · Findings · Compare · Agent · Connectors …) │
-└───────────────────────────────┬───────────────────────────────────────────────────────────────┘
-                                 │  versioned REST /api/v1  (dev proxy :5173, preview :4173)
-┌───────────────────────────────▼──────────────────────── FastAPI ──────────────────────────────┐
-│ routers: cases · runs · graph · comments · exports · agent · connectors                        │
-│ services: jobs · pipeline · images · comments · coordination · claims · location · graph ·     │
-│           exports · connectors · agent (bounded) · providers/ (llm · youtube · factcheck …)    │
-│ security: RBAC · SSRF blocklist · signature checks · redaction · prompt-injection-as-data      │
-└───────┬───────────────────┬──────────────────────┬───────────────────────┬────────────────────┘
-        │ SQLAlchemy/Alembic│ local disk / S3-MinIO │ optional Celery+Redis  │ optional providers
-        ▼                   ▼                        ▼                        ▼
-   SQLite / PostgreSQL   object storage          worker.py contract      Groq · Gemini ·
-                                                                          OpenRouter · YouTube ·
-                                                                          Google Fact Check
-```
+## API and access requirements
 
-**Evidence-first graph semantics.** Every edge carries a named meaning, origin, derivation
-class (`fact | similarity | hypothesis | note`), method string and evidence IDs. Hypotheses
-are rendered dotted-purple and can never be silently promoted to facts. Image matches follow
-a fixed precedence: exact SHA-256 → dual pHash+pixel (`likely_same_visual_source`) →
-region correlation (`partial_region_match`) → near-threshold pHash (`related_scene`) →
-`no_match`, via method `phash-v1(dct64)+grayscale-correlation+sliding-window`.
+The same matrix appears in the workspace under **Connectors**. “No API key” does not mean unrestricted access or unlimited redistribution.
 
----
+| Capability | Access | Actual behavior |
+|---|---|---|
+| Authorized JSON, CSV, text and image imports | **No API key** | User-supplied authorized evidence, not live platform collection |
+| DNS, RDAP, web metadata, CT and Wayback | **No API key** | Real bounded public requests; availability and rate limits still apply |
+| Mastodon public hashtag timelines | **Keyless if permitted** | Official instance API, one public page when public preview is allowed |
+| Narratives, network, geo and early warnings | **No API key** | Local analysis of the current case corpus, not a platform firehose |
+| Hashes, metadata and pixel screening | **No API key** | Deterministic local observations, no standalone manipulation verdict |
+| YouTube public comments and replies | **API key required** | `SCAMURAI_YOUTUBE_API_KEY`; official Data API v3 access and quota |
+| Published Google fact-check search | **API key required** | `SCAMURAI_GOOGLE_FACTCHECK_API_KEY`; no match never proves falsity |
+| External LLM for the bounded agent | **Optional API key** | Local deterministic tools need no LLM; Groq/Gemini/OpenRouter need credentials |
+| Synthetic-image classifier | **Local model** | Configure a Hugging Face model and optional dependencies; output is uncalibrated |
+| Instagram, Facebook and Reddit | **Official access** | Reviewed OAuth/permissions or approval required; no unconfigured live success |
+| OCR, reverse image search and video deepfakes | **Not available** | No working configured pipeline; no substitute result is generated |
+
+## Investigation UI
+
+The black/neon-green/JetBrains Mono interface uses [osint-ui.com](https://osint-ui.com/en) solely as its visual reference. Scamurai retains its own coordinated-disinformation workflows; unrelated reference-site tools are not included.
+
+- **Overview:** evidence coverage, data gaps, priority review cues, and narrative pulse.
+- **Narratives:** timelines, representative evidence, propagation order, and explainable acceleration rules.
+- **Geospatial:** an offline bundled Natural Earth map plus aggregate location tables—no external map-tile tracking.
+- **Live OSINT:** selectable source modules, per-source success/empty/limited/failed states, report history, raw evidence, and JSON export.
+- **Network & behavior:** observed account graph and transparent automation indicators.
+- **Media lab:** authorized media previews, integrity/metadata/pixel observations, model availability, and limitations.
+- **Evidence tools:** typed graph, entity explorer, comments, findings review, account comparison, exports, connectors, and bounded agent.
+- Responsive layouts, visible loading/empty/error states, role-aware controls, bundled fonts, and reduced-motion support.
 
 ## Quickstart
 
-Requires Python 3.13+ and Node 20+. No Docker, database server or API key needed for the
-full offline workflow.
-
-### One-shot with Make
+Requirements: **Python 3.13+** and **Node.js `^20.19` or `>=22.12`** (Vite 8 requirement). No database server or API key is needed for local authorized imports and deterministic analysis.
 
 ```bash
-make install      # backend + frontend dependencies
-make fixtures     # synthetic, clearly-labeled demo images (once)
-make run-api      # FastAPI  → http://localhost:8000  (Swagger at /docs)
-make run-web      # Vite dev → http://localhost:5173  (proxies /api → :8000)
-# or the production web build:
-make web          # vite preview → http://localhost:4173
-make seed         # populate a demo case against the running API
-make test         # 49 pytest tests
-make eval         # fixture evaluation harness (5/5 labeled cases)
-```
-
-### Manual
-
-```bash
-# Backend
+# Backend — terminal 1
 cd backend
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-python fixtures/make_fixture_images.py
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --host 0.0.0.0 --port 8000
 
-# Frontend (second terminal)
+# Frontend — terminal 2
 cd frontend
-npm install
-npm run dev
+npm ci
+npm run dev -- --host 0.0.0.0 --port 5173
 ```
 
-### Demo login (development only)
+Open `http://localhost:5173`. FastAPI Swagger is at `http://localhost:8000/docs`.
 
-| Role | Token | Can do |
-|---|---|---|
-| Owner | `dev-token-owner` | Everything, incl. membership and exports |
-| Analyst | `dev-token-analyst` | Imports, runs, agent, connectors |
-| Reviewer | `dev-token-reviewer` | Findings review workflow |
-| Viewer | `dev-token-viewer` | Read-only |
-
-### Model Context Protocol (MCP) Server
-
-Scamurai provides a native MCP server for AI coding assistants and autonomous agents (Antigravity, Claude Desktop, Cursor), enabling direct evidence extraction and disinformation analysis without external API keys:
+Convenience targets:
 
 ```bash
-python backend/scamurai_mcp.py
+make install
+make run-api       # terminal 1
+make run-web       # terminal 2
 ```
 
-**Available MCP Tools:**
-- `scamurai_analyze_media`: Extract SHA-256, DCT pHash, and EXIF GPS coordinates from suspect images.
-- `scamurai_analyze_comments`: Multilingual (Hindi/English/Hinglish) comment NLP classification and span detection.
-- `scamurai_detect_coordination`: Temporal clustering and lexical repetition analysis across multiple accounts.
-- `scamurai_extract_claims`: Decompose post text into verifiable propositions and fact-check search queries.
-
-### Docker (full stack)
+Docker Compose remains available for the PostgreSQL/Redis/MinIO development stack:
 
 ```bash
 cp .env.example .env
 docker compose up --build
-# Postgres + Redis + MinIO + API + Celery worker + frontend
 ```
 
-The SQLite/in-process path exists so the smallest runnable milestone needs no
-infrastructure; switch via `SCAMURAI_DATABASE_URL` and `SCAMURAI_REDIS_URL`.
+### Development roles
 
----
-
-## Configuration
-
-All settings are env-driven, `SCAMURAI_`-prefixed, and read by `backend/app/config.py`
-(pydantic-settings). Copy `.env.example` → `.env` (gitignored — **secrets never enter the
-repo, logs, exports or browser bundles**).
-
-| Variable | Purpose | Default |
+| Role | Token | Intended access |
 |---|---|---|
-| `SCAMURAI_DATABASE_URL` | SQLite locally; `postgresql+psycopg://…` in Docker | `sqlite:///./scamurai_dev.db` |
-| `SCAMURAI_STORAGE_DIR` / `SCAMURAI_S3_*` | Local disk or S3/MinIO object storage | `./var/storage` |
-| `SCAMURAI_REDIS_URL` | Enables the Celery worker path when set | empty (in-process jobs) |
-| `SCAMURAI_MAX_SEED_URLS`, `SCAMURAI_MAX_DEPTH`, `SCAMURAI_MAX_NEW_ENTITIES`, `SCAMURAI_RUN_DEADLINE_SECONDS` | Section-4 prototype guardrails (server-clamped) | 5 / 2 / 200 / 600 |
-| `SCAMURAI_PHASH_DISTANCE_THRESHOLD`, `SCAMURAI_PIXEL_CORRELATION_THRESHOLD`, `SCAMURAI_NEAR_DUPLICATE_RATIO` | Image/coordination tuning | 5 / 0.82 / 0.88 |
-| `SCAMURAI_JWT_SECRET`, `SCAMURAI_CORS_ORIGINS`, `SCAMURAI_EXPORT_LINK_TTL_SECONDS` | Security | change-me / localhost / 3600 |
-| `SCAMURAI_LLM_PROVIDER` | `groq` · `openrouter` · `gemini` | empty (deterministic rules only) |
-| `SCAMURAI_LLM_API_KEY`, `SCAMURAI_LLM_BASE_URL`, `SCAMURAI_LLM_MODEL_ID` | OpenAI-compatible LLM route | empty |
-| `SCAMURAI_GEMINI_API_KEY` | Native Gemini route | empty |
-| `SCAMURAI_YOUTUBE_API_KEY` | Live YouTube commentThreads import | empty |
-| `SCAMURAI_GOOGLE_FACTCHECK_API_KEY` | Live Claim Search | empty |
-| `SCAMURAI_REDDIT_CLIENT_ID/SECRET/USER_AGENT` | Approval-gated Reddit OAuth | empty |
+| Owner | `dev-token-owner` | Case administration, collection, analysis, review, export |
+| Analyst | `dev-token-analyst` | Collection and analysis workflows |
+| Reviewer | `dev-token-reviewer` | Findings review |
+| Viewer | `dev-token-viewer` | Read-only access to cases shared with that user |
 
----
+Paste either the token itself or the full `Bearer dev-token-owner` value; the client normalizes it. These are local development conveniences, **not production authentication**.
 
-## Enabling free live providers
+### Live session behavior
 
-Every adapter ships today and activates the moment a key is present in `.env`; the
-`/capabilities` endpoint and Connectors tab flip from `not_configured` to `configured`
-automatically. All free tiers, no credit card:
+- **Open live workspace** validates the token by calling the real cases API. Failures stay on screen.
+- There is no demo button, demo route, synthetic fallback, or fabricated “offline result.”
+- Logout clears only Scamurai’s session keys, not unrelated browser storage.
+- The default API address is same-origin; Vite proxies `/api` to FastAPI. A remote API can be configured from the top bar when CORS permits it.
+- A 401 ends the stale workspace session and returns to sign-in with an explicit message.
 
-| Provider | Free quota (verified Oct 2026) | Gives you |
-|---|---|---|
-| **Groq** (recommended) | 30 req/min, 1,000 req/day per model, gpt-oss-20b/120b | Agent LLM steps (OpenAI-compatible) |
-| Google Gemini AI Studio | ~250–1,500 req/day, Flash models | Same, native endpoint (free prompts may be used for training) |
-| OpenRouter | 50 req/day on `:free` models, one key | Same, OpenAI-compatible |
-| YouTube Data API v3 | 10,000 units/day; comment page = 1 unit | Public video comments + replies, key-only auth |
-| Google Fact Check Tools | Free Claim Search | Published fact-checker ratings with source URLs |
+## Optional configuration
 
-👉 **Exact click-by-click signup steps, quotas and env snippets:
-[`docs/REQUIRED_CREDENTIALS.md`](docs/REQUIRED_CREDENTIALS.md) (Hinglish).**
-Instagram (Business/Creator only) and Reddit (2025 manual-approval gate) are documented there too.
+Settings use the canonical `SCAMURAI_` prefix. Existing `PS03_` environment variables and `.env` files remain supported; when both forms are present, `SCAMURAI_` wins. See `.env.example` and [`docs/REQUIRED_CREDENTIALS.md`](docs/REQUIRED_CREDENTIALS.md).
 
-Design guarantees: provider content always reaches the LLM as **untrusted data**;
-`429`/transport failures become typed outcomes (`rate_limited`, `unavailable`), never
-fabricated evidence; query-string API keys are kept out of logs.
+```dotenv
+SCAMURAI_DEEPFAKE_MODEL_ID=
+SCAMURAI_DEEPFAKE_MODEL_REVISION=
+SCAMURAI_OSINT_TIMEOUT_SECONDS=12
+SCAMURAI_OSINT_MAX_HOSTNAMES=150
+SCAMURAI_YOUTUBE_API_KEY=
+SCAMURAI_GOOGLE_FACTCHECK_API_KEY=
+SCAMURAI_LLM_PROVIDER=
+SCAMURAI_LLM_MODEL_ID=
+SCAMURAI_LLM_API_KEY=
+SCAMURAI_LLM_BASE_URL=
+SCAMURAI_GEMINI_API_KEY=
+```
 
----
+A Hugging Face model also requires the optional `transformers`/`torch` dependencies. Review the exact model card and measure performance on representative, unseen-generator and compressed local data before operational use. Provider pricing, free tiers, quotas, and approval policies can change; verify them in the linked official documentation rather than treating this repository as a guarantee.
 
-## API reference
+## Analytics and evidence semantics
 
-All routes are versioned under `/api/v1`, require a bearer token, and enforce per-case
-membership. Interactive Swagger: **http://localhost:8000/docs**.
+- Narrative clustering uses normalized lexical TF-IDF vectors and cosine similarity over at most 500 collected posts. The response reports whether the input was truncated.
+- Timelines use hour/day/week buckets according to the observed span and preserve undated-item counts.
+- Acceleration compares the latest bucket with the preceding three buckets. Its attention score and rule inputs are returned with evidence IDs.
+- Automation indicators expose the raw feature values, triggered rules, formula, timestamp coverage, and limitations. They are not “percent bot” values.
+- Geospatial points are rounded aggregates for display. They describe supplied/reported location observations, not a person’s current position.
+- Media integrity and screening observations remain separate from optional model output.
+- Every OSINT report is stored as a hash-manifested evidence snapshot with independent module outcomes.
 
-| Method & path | Purpose |
+See [`docs/INTELLIGENCE.md`](docs/INTELLIGENCE.md) for method details and official source references.
+
+## Main API additions
+
+All case routes require a bearer token and case membership.
+
+| Route | Purpose |
 |---|---|
-| `POST /cases` · `GET /cases` · `GET /cases/{id}` | Case lifecycle (server-clamped guardrails) |
-| `GET /cases/{id}/capabilities` | Honest provider/config status matrix |
-| `POST /cases/{id}/inputs` · `POST /cases/{id}/uploads` | URL/text inputs, signature-validated uploads |
-| `POST /cases/{id}/runs` · `GET /cases/{id}/jobs/{jid}` · `POST …/cancel` | Idempotent workflow jobs + SSE at `/events` |
-| `POST /cases/{id}/transforms` | Bounded single transforms |
-| `GET /cases/{id}/graph` · `POST /graph/path` · `…/nodes/{nid}/pin` | Typed graph, provenance paths, layout pins |
-| `GET /cases/{id}/compare` | 2–4 account comparison (separated fact/signal/unknown sections) |
-| `GET /cases/{id}/comments` · `POST …/analyses` | Comments + transparent rule analyses |
-| `GET /cases/{id}/findings` · `POST …/reviews` | Findings buckets and reviewer workflow |
-| `GET /cases/{id}/evidence/{eid}` | Evidence chain with origin and derivation |
-| `POST /cases/{id}/agent/run` | Bounded agent: `{goal, step_budget≤20, client_idempotency_key}` → 202 |
-| `POST /cases/{id}/connectors/youtube/import` | Live bounded comment import (key-gated) |
-| `POST /cases/{id}/connectors/factcheck/search` | Live fact-check search (key-gated) |
-| `POST /cases/{id}/exports` · `GET …/exports/{eid}/download` | Redacted exports with SHA-256 manifest |
-| `GET /cases/{id}/audit` | Append-only audit trail |
+| `GET /api/v1/cases/{id}/analytics` | Narratives, behavior, network, geospatial coverage, and review alerts |
+| `POST /api/v1/cases/{id}/osint/investigate` | Bounded public-source investigation |
+| `GET /api/v1/cases/{id}/osint/reports` | Saved report history |
+| `GET /api/v1/cases/{id}/osint/reports/{report_id}` | Full source-attributed report |
+| `GET …/reports/{report_id}/download` | Canonical JSON with `X-Content-SHA256` |
+| `POST /api/v1/cases/{id}/connectors/mastodon/import` | Bounded public-hashtag collection |
+| `POST /api/v1/cases/{id}/runs` with `workflow=media_forensics` | Queue media screening |
+| `GET /api/v1/cases/{id}/media/forensics` | Saved observations and optional model output |
 
----
+Existing case, input, graph, comment, claim, review, export, agent, and provider routes remain under `/api/v1`.
 
-## Five-minute walkthrough
-
-> 📖 Hinglish step-by-step: [`docs/USAGE.md`](docs/USAGE.md) — login, upload, workflows,
-> graph reading, reviews, agent, connectors, exports, testing.
-
-1. Sign in as **Owner**, create a case.
-2. Upload `backend/fixtures/posts.json`, `comments.csv`, `factchecks.json` and the images
-   in `backend/fixtures/images/` (or `make seed`).
-3. Run workflows from the toolbar: **image pipeline → comments → coordination → claims →
-   location**; watch stages live (SSE/polling).
-4. Click any edge — the drawer shows derivation class, statement, evidence IDs, method and
-   limitations. Hypothesis edges are dotted and can never be silently promoted.
-5. **Findings**: review facts/signals/unknowns/conflicts; sign in as **Reviewer** to
-   accept/reject/request-more-evidence.
-6. **Compare** 2–4 accounts; **Agent** runs a policy-bounded plan; **Connectors** pulls
-   live YouTube comments / fact-checks once keys are set.
-7. Export a redacted PDF/HTML/CSV/JSON — each artifact carries a SHA-256 manifest.
-
----
-
-## Project layout
-
-```
-scamurai/
-├── backend/
-│   ├── app/
-│   │   ├── main.py              # FastAPI app, startup, safe error handlers, log hygiene
-│   │   ├── config.py            # env-driven SCAMURAI_ settings & guardrails
-│   │   ├── models.py            # evidence-first relational schema
-│   │   ├── registry.py          # 15 typed relationships + transform contracts
-│   │   ├── security.py          # RBAC, SSRF, signatures, redaction
-│   │   ├── routers/             # cases · runs · graph · comments · exports · agent · connectors
-│   │   └── services/
-│   │       ├── agent.py         # bounded agent, tool allowlist, policy & budgets (§16)
-│   │       ├── providers/       # llm (groq/openrouter/gemini) · youtube · factcheck · reddit
-│   │       ├── connectors.py    # capability declarations (honest not_configured states)
-│   │       └── …jobs, pipeline, images, comments, coordination, claims, location, exports, graph
-│   ├── alembic/                 # migrations (create_all used in SQLite dev)
-│   ├── fixtures/                # synthetic, clearly labeled demo data (8 images + JSON/CSV)
-│   ├── scripts/                 # seed_demo.py · evaluate.py
-│   ├── tests/                   # 49 tests: acceptance gates, agent policy, providers (mocked HTTP), RBAC
-│   └── worker.py                # optional Celery adapter
-├── frontend/
-│   └── src/
-│       ├── components/          # 13 components incl. GraphCanvas, AgentView, ConnectorsView …
-│       └── lib/                 # typed API client + types
-├── docker-compose.yml           # db · redis · minio · api · worker · frontend
-├── Makefile                     # install · fixtures · test · eval · run-api · run-web · web · seed · clean
-├── .env.example                 # all settings documented; copy to gitignored .env
-└── docs/                        # ARCHITECTURE · SECURITY · INTEGRATIONS · USAGE · REQUIRED_CREDENTIALS
-```
-
----
-
-## Testing and evaluation
+## Verification
 
 ```bash
-make test                                  # 49 passing, hermetic: temp DB, mocked provider HTTP
-cd backend && python scripts/evaluate.py   # 5/5 labeled fixture cases
+# Hermetic backend suite (provider HTTP is mocked)
+cd backend && python -m pytest tests/ -q
+
+# Production frontend build and dependency audit
+cd frontend && npm ci && npm run build && npm audit --audit-level=moderate
+
+# Browser tests: start API :8000 and Vite :5173 first
+npx playwright install chromium
+npm run test:e2e
+
+# Optional isolated QA fixtures and metric harness; not investigation input
+make fixtures
+make eval
 ```
 
-The suite covers the section-21 acceptance gates, the agent's policy layer (unknown tools,
-cross-case denial, disabled providers, step/time budgets, prompt-injection-as-data),
-provider adapters (typed `not_configured` / `rate_limited` / `unavailable` outcomes,
-pagination, 403 quota semantics), adversarial image/comment fixtures and RBAC isolation.
-Provider tests never touch the network — all HTTP runs through `httpx.MockTransport`, and
-the test harness clears credential env vars so a developer `.env` can never leak in.
+The Playwright suite creates its own clearly labelled validation case through the real API, so it needs neither a pre-seeded database nor an external provider. It covers real findings review, bearer-token normalization, API/access requirements, mobile overflow, and the rule that a live transport failure must not substitute demo evidence.
 
----
+The latest point-in-time results and external-source connectivity checks are recorded in [`docs/VALIDATION.md`](docs/VALIDATION.md). Connectivity is not an accuracy benchmark.
 
-## Documentation
+## Security and deployment boundaries
 
-| Doc | Contents |
-|---|---|
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Component design, data flow, graph semantics |
-| [`docs/SECURITY.md`](docs/SECURITY.md) | RBAC, SSRF, secret handling, redaction, injection defenses |
-| [`docs/INTEGRATIONS.md`](docs/INTEGRATIONS.md) | Real-vs-mocked matrix, outcome vocabulary, provider enablement |
-| [`docs/USAGE.md`](docs/USAGE.md) | Hinglish end-to-end usage walkthrough |
-| [`docs/REQUIRED_CREDENTIALS.md`](docs/REQUIRED_CREDENTIALS.md) | Hinglish free-tier key signup steps, quotas, env vars |
+- URL fetches use scheme/credential checks, non-global IP rejection, bounded responses/timeouts, and per-redirect validation.
+- Validation-time DNS checks do not by themselves eliminate DNS-rebinding/TOCTOU risk. Internet-facing multi-tenant deployment still needs network egress policy and, where feasible, connection-level DNS pinning.
+- Uploaded images are checked by signature, size, and decode limits. Protected media previews use authenticated blob retrieval.
+- Provider content is untrusted data, not agent instructions. Keys remain server-side.
+- Replace dev tokens, configure TLS/IdP/PostgreSQL/durable workers/private object storage, and complete jurisdiction-specific privacy, retention, and evidence-handling review before deployment.
 
----
+More detail: [`docs/SECURITY.md`](docs/SECURITY.md), [`docs/INTEGRATIONS.md`](docs/INTEGRATIONS.md), and [`docs/USAGE.md`](docs/USAGE.md).
 
-## Honest limitations (read before demoing)
+## Project map
 
-- Without keys, connectors honestly report `not_configured` / `access_required`; the
-  offline import path and all deterministic pipelines remain fully functional.
-- The comment classifier is a transparent, **uncalibrated** rule layer; precision, recall
-  and calibration must be measured on representative Hindi/Hinglish data before any
-  production accuracy claim — the system never invents accuracy numbers.
-- pHash thresholds are configurable engineering defaults validated on fixtures, not
-  forensic certainties; every match category carries its method and limits.
-- Dev tokens are a local convenience, not an identity system; replace with an IdP before
-  deployment, and set a real `SCAMURAI_JWT_SECRET`.
-- Legal admissibility (e.g. BSA Section 63), DPDP compliance and retention lawfulness
-  require jurisdiction-specific review — hashes are integrity aids, not certifications.
+```text
+backend/app/
+  routers/       cases, runs, graph, comments, connectors, osint, analytics, media, exports, agent
+  services/      evidence pipelines, analytics, OSINT, media screening, providers, jobs, exports
+  models.py      case-scoped evidence, source access, graph, reports and forensic records
+  config.py      SCAMURAI_ settings with PS03_ compatibility
+backend/tests/   acceptance, security, provider, intelligence and configuration tests
+frontend/src/
+  components/    mission dashboards, source workbench, graph/evidence and review views
+  lib/           typed live-only API client and shared types
+frontend/e2e/    self-contained Playwright browser checks with isolated validation fixtures
+docs/            architecture, usage, integrations, intelligence methods, security, validation
+```
+
+## Human-review reminder
+
+Shared wording can result from breaking news, press releases, hashtags, quoted material, or ordinary audience behavior. Location metadata can be wrong or spoofed. Registry data does not establish website intent. A model label can be wrong. Scamurai preserves these caveats beside the evidence so an analyst can investigate alternatives rather than mistake a screening cue for a conclusion.

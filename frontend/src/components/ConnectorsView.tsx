@@ -1,165 +1,74 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "../lib/api";
 import type { Capability } from "../lib/types";
+import Icon from "./Icon";
+import { PageHeader, ScopeNotice } from "./AnalyticsPrimitives";
 
-type YtResult = {
-  video_id: string;
-  comments_created: number;
-  uncertain_duplicates_held: number;
-  coverage: { status: string; unique_collected: number; platform_displayed_count: number | null };
-};
+const ACCESS_ROWS = [
+  { capability: "Authorized JSON, CSV, text and image imports", access: "NO API KEY", tone: "keyless", reality: "User-supplied authorized evidence; this is not live platform collection." },
+  { capability: "DNS, RDAP, web metadata, CT and Wayback", access: "NO API KEY", tone: "keyless", reality: "Real bounded public requests; provider availability and rate limits still apply." },
+  { capability: "Mastodon public hashtag timelines", access: "KEYLESS IF PERMITTED", tone: "keyless", reality: "Official instance API; one public page when the instance allows public preview." },
+  { capability: "Narratives, network, geo and early warnings", access: "NO API KEY", tone: "keyless", reality: "Computed locally from the current collected case corpus; not a platform firehose." },
+  { capability: "Hashes, metadata and pixel screening", access: "NO API KEY", tone: "keyless", reality: "Deterministic local observations; no standalone manipulation verdict." },
+  { capability: "YouTube public comments and replies", access: "API KEY REQUIRED", tone: "key", reality: "Set SCAMURAI_YOUTUBE_API_KEY; official Data API v3 quota is required." },
+  { capability: "Published Google fact-check search", access: "API KEY REQUIRED", tone: "key", reality: "Set SCAMURAI_GOOGLE_FACTCHECK_API_KEY; no match never proves a claim false." },
+  { capability: "External LLM for the bounded agent", access: "OPTIONAL API KEY", tone: "key", reality: "Local deterministic tools need no LLM; Groq, Gemini or OpenRouter need server-side credentials." },
+  { capability: "Synthetic-image classifier", access: "LOCAL MODEL", tone: "model", reality: "No API key by default; configure a real Hugging Face model and optional dependencies. Output is uncalibrated." },
+  { capability: "Instagram, Facebook and Reddit", access: "OFFICIAL ACCESS", tone: "limited", reality: "Reviewed OAuth/permissions or approval is required; live collection is not claimed when unconfigured." },
+  { capability: "OCR, reverse image search and video deepfakes", access: "NOT AVAILABLE", tone: "limited", reality: "No working provider/pipeline is configured; no substitute result is generated." },
+];
 
-type FcResult = {
-  query: string;
-  note: string;
-  matches: { claim: string; claimant: string; outcome: string; source: string; url: string; claim_date?: string }[];
-};
-
-export default function ConnectorsView({ caseId, role, onChanged }: {
-  caseId: string; role: string; onChanged: () => void;
-}) {
+export default function ConnectorsView({ caseId, role, onChanged }: { caseId: string; role: string; onChanged: () => void }) {
   const [caps, setCaps] = useState<Capability[]>([]);
   const [ytUrl, setYtUrl] = useState("");
-  const [ytResult, setYtResult] = useState<YtResult | null>(null);
+  const [ytResult, setYtResult] = useState<Record<string, any> | null>(null);
   const [fcQuery, setFcQuery] = useState("");
-  const [fcResult, setFcResult] = useState<FcResult | null>(null);
+  const [fcResult, setFcResult] = useState<Record<string, any> | null>(null);
+  const [instance, setInstance] = useState("mastodon.social");
+  const [hashtag, setHashtag] = useState("");
+  const [mastodonResult, setMastodonResult] = useState<Record<string, any> | null>(null);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const canRun = ["owner", "analyst"].includes(role);
-
-  const refresh = useCallback(() => {
-    api.capabilities(caseId).then(setCaps).catch(() => setCaps([]));
-  }, [caseId]);
+  const refresh = useCallback(() => { api.capabilities(caseId).then(setCaps).catch((e) => setError(e instanceof ApiError ? e.message : String(e))); }, [caseId]);
   useEffect(refresh, [refresh]);
-
   const cap = (provider: string) => caps.find((c) => c.provider === provider);
 
-  async function importYoutube() {
-    setBusy("yt"); setError(""); setYtResult(null);
-    try {
-      setYtResult(await api.youtubeImport(caseId, ytUrl));
-      onChanged();
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : String(e));
-    } finally { setBusy(""); }
+  async function guard(key: string, fn: () => Promise<void>) {
+    setBusy(key); setError("");
+    try { await fn(); } catch (e) { setError(e instanceof ApiError ? e.message : String(e)); }
+    finally { setBusy(""); }
   }
 
-  async function factCheck() {
-    setBusy("fc"); setError(""); setFcResult(null);
-    try {
-      setFcResult(await api.factcheckSearch(caseId, fcQuery));
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : String(e));
-    } finally { setBusy(""); }
-  }
-
-  return (
-    <div className="scroll" style={{ padding: 14, height: "100%", overflow: "auto", maxWidth: 900 }}>
-      <h3>Live connectors</h3>
-      <p className="muted">
-        Sab connectors optional hain. Key configured hone par hi live calls hoti hain; warna UI honestly
-        &quot;not configured&quot; dikhata hai — koi fabricated evidence nahi. Keys sirf server-side <code>.env</code> me
-        rakhi jaati hain, browser kabhi unhe touch nahi karta.
-      </p>
-
-      <div style={{ background: "#18181b", border: "1px solid #27272a", borderRadius: 8, padding: 14, margin: "14px 0" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 20 }}>⚡</span>
-          <div>
-            <h4 style={{ margin: 0 }}>Model Context Protocol (MCP) Mode</h4>
-            <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>
-              Direct AI Agent Tool Calling (Replaces Proprietary External APIs with zero keys)
-            </div>
-          </div>
-          <span className="badge fact" style={{ marginLeft: "auto" }}>Native MCP Active</span>
-        </div>
-        <p className="muted" style={{ fontSize: 12, marginTop: 10 }}>
-          Instead of configuring commercial API keys (YouTube, Gemini, FactCheck), you can connect Scamurai directly to any AI Agent (Antigravity, Claude Desktop, Cursor) via MCP:
-        </p>
-        <pre style={{ background: "#09090b", padding: 10, borderRadius: 6, fontSize: 12, overflowX: "auto" }}>
-{`# Run Scamurai as an MCP Server:
-python backend/scamurai_mcp.py
-
-# Available MCP Tools:
-• scamurai_analyze_media(image_path)      -> DCT pHash + EXIF GPS extraction
-• scamurai_analyze_comments(comments)     -> Multilingual Hindi/Hinglish NLP
-• scamurai_detect_coordination(posts)     -> Multi-account temporal clustering
-• scamurai_extract_claims(text)           -> Fact-check query propositioning`}
-        </pre>
+  return <div className="view-page narrow-view">
+    <PageHeader eyebrow="COLLECTION & PROVIDERS" title="Live connectors" description="Official APIs and authorized imports with explicit access, quota and coverage states." />
+    <ScopeNotice>API keys stay in server-side <code>.env</code>. A 401, 403, 429 or transport failure is never converted into “no results”. Public access does not imply unlimited redistribution or platform-wide coverage.</ScopeNotice>
+    {error && <div className="inline-alert danger"><Icon name="alert" /><span>{error}</span></div>}
+    <section className="card access-card"><div className="card-head"><div><span className="eyebrow">BEFORE YOU INVESTIGATE</span><h2>API & access requirements</h2><p>Exactly what works keyless, what needs credentials, and what is unavailable.</p></div></div>
+      <div className="access-table" role="table" aria-label="API and access requirements">
+        <div className="access-table-head" role="row"><span>CAPABILITY</span><span>ACCESS</span><span>ACTUAL BEHAVIOR</span></div>
+        {ACCESS_ROWS.map((row) => <div className="access-row" role="row" key={row.capability}><b>{row.capability}</b><span className={`access-badge ${row.tone}`}>{row.access}</span><p>{row.reality}</p></div>)}
       </div>
+    </section>
+    <section className="card"><div className="card-head"><div><span className="eyebrow">CAPABILITY MATRIX</span><h2>Source health</h2></div><button className="icon-button" onClick={refresh}><Icon name="refresh" /></button></div><div className="capability-grid">{caps.map((item) => <div className="capability-card" key={item.provider}><div><b>{item.provider}</b><span className={`source-status ${item.configured ? "good" : "limited"}`}><span />{item.status.replaceAll("_", " ")}</span></div><p>{item.detail}</p><div className="feature-tags">{item.operations.map((operation) => <span key={operation}>{operation.replaceAll("_", " ")}</span>)}</div></div>)}</div></section>
 
-      <h4>Provider status</h4>
-      <table>
-        <thead><tr><th>Provider</th><th>Status</th><th>Detail</th></tr></thead>
-        <tbody>
-          {caps.map((c) => (
-            <tr key={c.provider}>
-              <td><b>{c.provider}</b></td>
-              <td><span className={`badge ${c.configured ? "fact" : "warn"}`}>{c.status}</span></td>
-              <td className="muted" style={{ fontSize: 12 }}>{c.detail}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <section className="card connector-card"><div className="connector-heading"><span className="icon-tile"><Icon name="narrative" /></span><div><h2>Mastodon public hashtag timeline</h2><p>Official instance REST API · no key when public preview is enabled · one bounded page</p></div><span className="mini-tag">KEYLESS WHEN PERMITTED</span></div>
+      <div className="form-grid two"><div className="field"><label>Public instance</label><input value={instance} onChange={(e) => setInstance(e.target.value)} disabled={!canRun || !!busy} placeholder="mastodon.social" /></div><div className="field"><label>Hashtag (without #)</label><input value={hashtag} onChange={(e) => setHashtag(e.target.value)} disabled={!canRun || !!busy} placeholder="disinformation" /></div></div>
+      <button className="btn btn-primary" disabled={!canRun || !!busy || !hashtag.trim() || !instance.trim()} onClick={() => guard("mastodon", async () => { setMastodonResult(null); const result = await api.mastodonImport(caseId, instance, hashtag); setMastodonResult(result); onChanged(); })}>{busy === "mastodon" ? <span className="spinner" /> : <Icon name="download" />} {busy === "mastodon" ? "Collecting public page…" : "Import public timeline"}</button>
+      {mastodonResult && <div className="result-callout"><Icon name="check" /><div><b>{mastodonResult.posts} new posts · {mastodonResult.accounts} accounts · {mastodonResult.geo_observations || 0} geo observations</b><p>{mastodonResult.coverage}</p><small>{mastodonResult.statuses_returned} statuses returned · {mastodonResult.skipped_reblogs} reblogs excluded</small></div></div>}
+    </section>
 
-      <h4 style={{ marginTop: 22 }}>YouTube comments import (Data API v3, free key)</h4>
-      {!canRun && <p className="badge err">Your role ({role}) cannot run imports.</p>}
-      {cap("youtube") && !cap("youtube")!.configured && (
-        <p className="badge warn">SCAMURAI_YOUTUBE_API_KEY set nahi hai — server .env me key daalo, phir ye section live ho jayega.</p>
-      )}
-      <div style={{ display: "flex", gap: 8 }}>
-        <input
-          value={ytUrl} onChange={(e) => setYtUrl(e.target.value)}
-          placeholder="https://www.youtube.com/watch?v=… ya 11-char video id"
-          style={{ flex: 1 }}
-          disabled={!canRun || busy !== ""}
-        />
-        <button className="btn secondary" disabled={!canRun || busy !== "" || ytUrl.trim().length < 11}
-          onClick={importYoutube}>
-          {busy === "yt" ? "Importing…" : "Import comments"}
-        </button>
-      </div>
-      {ytResult && (
-        <div className="evidence-chain" style={{ marginTop: 8 }}>
-          <div>Video <b>{ytResult.video_id}</b>: {ytResult.comments_created} naye comments,
-            {" "}{ytResult.uncertain_duplicates_held} uncertain duplicates hold kiye gaye.</div>
-          <div className="muted" style={{ fontSize: 12 }}>Coverage: {ytResult.coverage.status}</div>
-        </div>
-      )}
+    <section className="card connector-card"><div className="connector-heading"><span className="icon-tile"><Icon name="media" /></span><div><h2>YouTube public comments</h2><p>Official Data API v3 · key and quota required · replies and coverage state preserved</p></div>{cap("youtube") && <span className={`source-status ${cap("youtube")!.configured ? "good" : "limited"}`}><span />{cap("youtube")!.status.replaceAll("_", " ")}</span>}</div>
+      <div className="inline-form"><input value={ytUrl} onChange={(e) => setYtUrl(e.target.value)} placeholder="https://www.youtube.com/watch?v=… or 11-character video ID" disabled={!canRun || !!busy} /><button className="btn btn-secondary" disabled={!canRun || !!busy || ytUrl.trim().length < 11} onClick={() => guard("youtube", async () => { setYtResult(null); setYtResult(await api.youtubeImport(caseId, ytUrl)); onChanged(); })}>{busy === "youtube" ? "Importing…" : "Import comments"}</button></div>
+      {!cap("youtube")?.configured && <p className="limitation">Set <code>SCAMURAI_YOUTUBE_API_KEY</code> (legacy <code>PS03_YOUTUBE_API_KEY</code> also works) on the backend.</p>}
+      {ytResult && <div className="result-callout"><Icon name="check" /><div><b>{ytResult.comments_created} new comments imported</b><p>Coverage: {ytResult.coverage?.status} · {ytResult.uncertain_duplicates_held} uncertain duplicates held</p></div></div>}
+    </section>
 
-      <h4 style={{ marginTop: 22 }}>Google Fact Check search (free Claim Search API)</h4>
-      {cap("factcheck") && !cap("factcheck")!.configured && (
-        <p className="badge warn">SCAMURAI_GOOGLE_FACTCHECK_API_KEY set nahi hai.</p>
-      )}
-      <div style={{ display: "flex", gap: 8 }}>
-        <input
-          value={fcQuery} onChange={(e) => setFcQuery(e.target.value)}
-          placeholder="Claim text jise verify karna hai…"
-          style={{ flex: 1 }}
-          disabled={!canRun || busy !== ""}
-        />
-        <button className="btn secondary" disabled={!canRun || busy !== "" || fcQuery.trim().length < 3}
-          onClick={factCheck}>
-          {busy === "fc" ? "Searching…" : "Search fact-checks"}
-        </button>
-      </div>
-      {fcResult && (
-        <div style={{ marginTop: 8 }}>
-          <p className="muted" style={{ fontSize: 12 }}>{fcResult.note}</p>
-          {fcResult.matches.length === 0 && <p className="badge warn">Koi published fact-check nahi mila — ye falsity ka proof nahi hai.</p>}
-          {fcResult.matches.map((m, i) => (
-            <div key={i} className="evidence-chain">
-              <div><b>{m.claim}</b> — <span className="badge hypothesis">{m.outcome || "unrated"}</span></div>
-              <div className="muted" style={{ fontSize: 12 }}>
-                {m.claimant && <>claimant: {m.claimant} · </>}{m.source}
-                {m.url && <> · <a href={m.url} target="_blank" rel="noreferrer">source</a></>}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+    <section className="card connector-card"><div className="connector-heading"><span className="icon-tile"><Icon name="check" /></span><div><h2>Published fact-check search</h2><p>Google Fact Check Tools Claim Search · no result never means false</p></div>{cap("factcheck") && <span className={`source-status ${cap("factcheck")!.configured ? "good" : "limited"}`}><span />{cap("factcheck")!.status.replaceAll("_", " ")}</span>}</div>
+      <div className="inline-form"><input value={fcQuery} onChange={(e) => setFcQuery(e.target.value)} placeholder="Claim text to find matching published reviews…" disabled={!canRun || !!busy} /><button className="btn btn-secondary" disabled={!canRun || !!busy || fcQuery.trim().length < 3} onClick={() => guard("factcheck", async () => { setFcResult(null); setFcResult(await api.factcheckSearch(caseId, fcQuery)); })}>{busy === "factcheck" ? "Searching…" : "Search reviews"}</button></div>
+      {fcResult && <div className="factcheck-results"><p className="muted">{fcResult.note}</p>{!fcResult.matches?.length && <div className="empty-inline"><Icon name="info" />No matching published review returned. Claim truth remains undetermined.</div>}{(fcResult.matches || []).map((match: any, index: number) => <div className="evidence-chain" key={index}><b>{match.claim}</b><p>{match.outcome || "Unrated"} · {match.source}</p>{match.url && <a href={match.url} target="_blank" rel="noreferrer">Open review <Icon name="external" size={12} /></a>}</div>)}</div>}
+    </section>
 
-      {error && <p className="badge err" style={{ marginTop: 12 }}>{error}</p>}
-    </div>
-  );
+    <details className="methodology-note"><summary><Icon name="info" /> What the local MCP server does—and does not do</summary><p>The MCP server exposes local media, comment, coordination and claim-analysis functions to an AI client. It does <b>not</b> replace platform API authorization or turn an LLM into a live data source.</p><pre>python backend/scamurai_mcp.py</pre></details>
+  </div>;
 }

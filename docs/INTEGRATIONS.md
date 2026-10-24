@@ -1,41 +1,48 @@
-# Real vs mocked integrations
+# Real, configured, limited and unavailable integrations
 
-The system never presents a mock as collected evidence. Every connector declares
-capabilities and an honest status, surfaced at `GET /api/v1/cases/{id}/capabilities`.
+Scamurai must not present a mock as collected evidence. Connector capabilities are available at `GET /api/v1/cases/{id}/capabilities`; individual source outcomes are stored and surfaced with the investigation.
 
-| Component | In this build | Production path | Evidence honesty rule |
-|---|---|---|---|
-| Manual CSV/JSON import | **Real, local** | Same | Labeled `authorized_import`; snapshot preserved |
-| File/image upload | **Real, local** (signature, SHA-256, pHash, EXIF) | S3-compatible bucket | Separate original/derivative assets |
-| Generic public web fetch | **Real**, SSRF-guarded httpx | Same with egress proxy | Login walls/429/5xx become explicit outcomes |
-| Instagram / Facebook | **Not configured** | OAuth + official APIs after review | Shows `access_required`; import remains available |
-| YouTube comments | **Live adapter shipped** (`POST /connectors/youtube/import`); active with free `SCAMURAI_YOUTUBE_API_KEY` | Official Data API v3, key-only | commentsDisabled/quota/transport failures become explicit `SourceAccess` outcomes; denominator never faked |
-| Reddit | Status + OAuth helper shipped; approval-gated since 2025 | Manual Responsible Builder approval | Shows `not_configured` / `configured_pending_approval`; import remains available |
-| OCR (e.g. Tesseract/Cloud Vision) | **Disabled** (`SCAMURAI_OCR_PROVIDER` empty) | Provider + license + quota check | Transform returns `insufficient_evidence` limitation, never fake text |
-| Reverse image search (TinEye / Cloud Vision Web Detection) | **Disabled** | Adapter with verified terms/credentials | Snippets stay "leads" until the source is opened |
-| Fact-check search | **Live adapter shipped** (`POST /connectors/factcheck/search`); active with free `SCAMURAI_GOOGLE_FACTCHECK_API_KEY`; imported library still works offline | Google Fact Check Tools API | No-result is never proof of falsity; response says so explicitly |
-| LLM planning/summarization | **Adapter shipped** for Groq / OpenRouter / Gemini (`services/providers/llm.py`); activates only with a key; deterministic rules remain the offline default | OpenAI-compatible or Gemini endpoint, configured model ID | All content passed as untrusted data; JSON-only; 429/transport errors are typed, never fabricated output |
+| Component | Current implementation | Evidence/access rule |
+|---|---|---|
+| Authorized CSV/JSON import | Real local normalization and immutable input/evidence snapshots | Labelled as authorized/user-supplied import; it is not represented as live platform collection |
+| File/image upload | Signature, size/decode checks, SHA-256 and media pipeline | Original bytes and derivatives remain distinct |
+| Generic public web fetch | Real bounded `httpx` fetch with URL/redirect/response controls | Login walls, quota and transport failures become explicit outcomes |
+| Public-infrastructure OSINT | Real keyless DNS-over-HTTPS, IANA/RDAP, web metadata, crt.sh and Wayback adapters | Independent module outcomes; canonical hash-snapshotted report; no failed-source fallback values |
+| Mastodon public hashtags | Real official instance API adapter | One bounded public page when permitted; no private/unlisted statuses, reblogs imported as originals, or login bypass |
+| YouTube comments | Real official Data API adapter; requires `SCAMURAI_YOUTUBE_API_KEY` | Disabled comments, quota and transport outcomes remain distinct; coverage denominator is not invented |
+| Google Fact Check | Real Claim Search adapter; requires `SCAMURAI_GOOGLE_FACTCHECK_API_KEY` | A published match is source evidence; no match is not proof of falsity |
+| Instagram / Facebook | Not configured in this build | Official reviewed OAuth/permissions are required; authorized import remains available |
+| Reddit | OAuth helper/status only; approval-gated | Credentials alone do not establish approved API access; no live success is claimed |
+| OCR | Disabled unless an actual provider is configured | No fabricated transcript |
+| Reverse image search | Disabled until a provider, credentials, terms and data handling are configured | Search snippets would be leads, not verified source content |
+| Deterministic media screening | Real hashes, selected metadata, possible provenance-marker bytes and pixel/JPEG measurements | Screening observations only; C2PA byte markers are not cryptographic verification |
+| Optional synthetic-image model | Real configured Hugging Face image-classification inference | Raw labels and uncalibrated aggregation only; unavailable/not-configured states return no score |
+| LLM planning/summarization | Adapters for Groq/OpenRouter/Gemini; deterministic local rules by default | Provider content is untrusted data; failures are typed, never replaced with invented analysis |
+| Celery/Redis, PostgreSQL, S3/MinIO | Compose/worker contracts plus local in-process/SQLite/disk development path | Local development behavior is not represented as durable production infrastructure |
 
-> 🔑 **Free-tier credentials, step-by-step (Hinglish): [REQUIRED_CREDENTIALS.md](REQUIRED_CREDENTIALS.md)** —
-> exact signup steps, quota limits, env vars, and the minimum key set needed.
-| Jev (Choice/Score/Noul) | **Not implemented** (section 16: optional/experimental) | Pilot against baseline classifier first | Confidence ≠ accuracy; abstention preserved |
-| Celery + Redis | Compose config + `worker.py` contract | Durable broker with acks/late ack | Job state always in DB; idempotent tasks |
-| PostgreSQL | Alembic + SQLAlchemy ready; SQLite default locally | Primary authoritative store | Same SQL dialect-targeted models |
-| S3/MinIO | Compose config; disk storage locally | Private bucket, short-lived links | Metadata in DB, bytes in object store |
-| Exposure-check module | **Absent by design** (section 20) | Only with verified lawful provider/consent | No leaked passwords/tokens/dossiers, ever |
+`SCAMURAI_` is the canonical environment prefix. Existing `PS03_` shell variables and `.env` entries remain supported; canonical values take precedence.
 
-## Connector outcome vocabulary
+## Outcome vocabulary
 
-`successful · successful_empty · not_supported · login_required · permission_denied ·
-rate_limited · unavailable · not_configured` — each is stored on `SourceAccess` and
-shown in the UI. None of them means "nothing exists".
+Common source outcomes include:
+
+```text
+successful · successful_empty · partial · not_supported · login_required
+permission_denied · rate_limited · unavailable · not_configured
+```
+
+A failed or restricted source is not a successful empty result. `successful_empty` is reserved for a source that actually responded with no matching records. Analytics also turns relevant access failures into visible data-coverage review cues.
+
+## Live-only runtime and QA fixture boundary
+
+The product frontend has no demo mode or demo route. Live API, authentication, provider, and network failures throw visible errors and never activate synthetic content. Clearly labelled synthetic records exist only in automated tests/evaluation fixtures; they are not a fallback investigation path and are not included in a clean preview. The old `make seed` showcase workflow has been removed.
 
 ## Enabling a provider safely
 
-1. Add credentials server-side only (env/secret manager); never in prompts, exports or
-   frontend bundles.
-2. Set the corresponding `SCAMURAI_*` setting; capabilities flip to `configured`.
-3. Record provider, query image/text, retrieval time and result type per match.
-4. Add contract tests using the provider's sandbox; keep the disabled-state tests.
-5. Re-validate thresholds and retrain/recalibrate classifiers on representative
-   Hindi/Hinglish data before any accuracy claim.
+1. Add credentials server-side only; never place them in frontend code, prompts, exports or logs.
+2. Set the corresponding setting and verify the capability state with a non-secret health check.
+3. Record provider, query, collection time, result type and coverage limitations.
+4. Exercise success, empty, access-denied, quota, malformed-response and transport-failure paths.
+5. Revalidate any threshold/model on representative local data before making an accuracy claim.
+
+Credential setup notes: [`REQUIRED_CREDENTIALS.md`](REQUIRED_CREDENTIALS.md). Method and official-source references: [`INTELLIGENCE.md`](INTELLIGENCE.md).

@@ -16,7 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models import (
-    Account, Comment, EvidenceRecord, MediaAsset, Post, SourceAccess, utcnow,
+    Account, Comment, EvidenceRecord, GeoObservation, MediaAsset, Post, SourceAccess, utcnow,
 )
 from ..registry import (
     ACCOUNT, COMMENT, EVIDENCE, MEDIA, POST,
@@ -98,7 +98,7 @@ def import_posts_bundle(db: Session, case_id: str, actor_id: str, payload: dict,
                                accounts[other_handle].id, "PUBLICLY_CROSSLINKS",
                                statement=f"Public profile links to @{other_handle}")
 
-    counts = {"accounts": len(accounts), "posts": 0, "media_links": 0}
+    counts = {"accounts": len(accounts), "posts": 0, "media_links": 0, "geo_observations": 0}
     for row in payload.get("posts", []):
         existing = db.scalar(select(Post).where(
             Post.case_id == case_id, Post.source_id == row["source_id"]))
@@ -128,6 +128,30 @@ def import_posts_bundle(db: Session, case_id: str, actor_id: str, payload: dict,
             if media:
                 graph.add_edge(db, case_id, POST, post.id, MEDIA, media.id, "CONTAINS_MEDIA")
                 counts["media_links"] += 1
+
+        # Optional source-reported location from an authorized export. It is
+        # never resolved to a person/device or promoted to verified ground truth.
+        location = row.get("location") if isinstance(row.get("location"), dict) else {}
+        location_name = str(location.get("name") or row.get("location_name") or "")[:300]
+        lat_value = location.get("latitude", row.get("latitude"))
+        lon_value = location.get("longitude", row.get("longitude"))
+        latitude = longitude = None
+        try:
+            if lat_value is not None and lon_value is not None:
+                latitude, longitude = float(lat_value), float(lon_value)
+                if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+                    latitude = longitude = None
+        except (TypeError, ValueError):
+            latitude = longitude = None
+        if location_name or (latitude is not None and longitude is not None):
+            db.add(GeoObservation(
+                case_id=case_id, post_id=post.id, location_name=location_name,
+                latitude=latitude, longitude=longitude,
+                precision=str(location.get("precision") or row.get("location_precision")
+                             or ("reported_point" if latitude is not None else "place_name"))[:40],
+                source="post_import_reported", observed_at=ts,
+            ))
+            counts["geo_observations"] += 1
 
     db.add(SourceAccess(case_id=case_id, input_id=input_id, provider=platform,
                         method="authorized_import",

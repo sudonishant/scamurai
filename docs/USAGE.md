@@ -13,7 +13,6 @@ kar deta hai.
 cd backend
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-python fixtures/make_fixture_images.py      # synthetic demo images
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 # Frontend (doosra terminal)
@@ -36,7 +35,7 @@ make run-web     # terminal 2
 ## 2. Login
 
 Browser me frontend kholo (`http://localhost:5173` ya sandbox preview link).
-Development ke 4 role-based demo tokens:
+Development ke 4 role-based tokens (ye demo mode nahi, local development authentication hain):
 
 | Role | Token | Kar sakte hain |
 |---|---|---|
@@ -45,27 +44,32 @@ Development ke 4 role-based demo tokens:
 | Reviewer | `dev-token-reviewer` | findings accept/reject/need-more |
 | Viewer | `dev-token-viewer` | sirf dekhna (read-only) |
 
+Token paste karte waqt `dev-token-owner` ya poora `Bearer dev-token-owner` dono chalenge; client prefix normalize karta hai. **Open live workspace** real cases API se token validate karta hai. Invalid token, 401 ya network failure par visible error milta hai—koi demo/offline evidence fallback nahi.
+
 > Production me ye screen real identity provider (OAuth/SSO) se replace hogi.
 
 ---
 
-## 3. Pehla investigation — 7 goals
+## 3. Pehla investigation — goals aur mission views
 
-Start screen par 7 goal cards hain: **Check a post, Find image source, Estimate photo
-location, Analyze comments, Compare accounts, Investigate coordination, Empty graph**.
+Start screen par 4 goal cards hain: **Monitor a campaign, Verify a post or claim, Inspect
+media, Investigate infrastructure**. Existing case ko **Open case** se bhi khola ja sakta hai.
 
-1. Goal card click karo → case scope form aata hai (title, purpose, languages).
-2. Case banne par 4-panel workspace khulta hai:
-   - **Left** — case stats, relationship filters, connector capabilities
-   - **Center** — Cytoscape evidence graph (node shape = entity type, line style = fact/signal/hypothesis)
-   - **Right** — evidence drawer (kisi bhi node/edge par click karo)
-   - **Bottom** — jobs & timeline (live stage updates)
+1. Goal card click karo → selected goal retain hota hai aur case scope form aata hai
+   (title, authorized purpose, languages).
+2. Case banne par grouped investigation workspace khulta hai:
+   - **Monitor** — Overview, Narratives aur Geospatial map/baselines
+   - **Investigate** — Live OSINT, Network & behavior, Evidence graph, Entity explorer, Media lab
+   - **Evidence** — Comments, Findings & review, Compare accounts, Exports
+   - **System** — Connectors aur bounded Agent
+3. Top bar ka **Collect & run** data intake/workflows kholta hai; **Jobs** progress aur
+   failures dikhata hai. Analytics current collected corpus par on-demand refresh hote hain.
 
 ---
 
 ## 4. Data daalna (import-first — koi live platform credential nahi chahiye)
 
-Workspace ke top par 3 tareeke hain:
+**Collect & run** drawer me 3 intake tareeke hain:
 
 - **URL box** — `http/https` post/account link. SSRF policy automatically check hoti hai;
   internal/metadata addresses block ho jaate hain. Instagram jaise platform bina connector ke
@@ -76,21 +80,14 @@ Workspace ke top par 3 tareeke hain:
   - `.json` — posts bundle (`fixtures/posts.json` jaisa) ya fact-check library
   - `.csv` — comments export (coverage metadata ke saath)
 
-Ready-made demo files: `backend/fixtures/` me hain — `posts.json`, `comments.csv`,
-`factchecks.json`, aur `fixtures/images/` ke 8 synthetic images.
-
-Demo case ek command me populate karna (server chalu hona chahiye):
-
-```bash
-make seed        # ya: cd backend && python scripts/seed_demo.py
-```
+`backend/fixtures/` ke labelled synthetic records sirf automated tests/evaluation ke liye hain. Inhe investigation evidence ya live-source result ki tarah present mat karo. Product runtime me demo case seed karne ka workflow nahi hai; real investigation ke liye authorized import ya permitted live connector use karo.
 
 ---
 
 ## 5. Analysis chalana (bounded jobs)
 
-Toolbar par 6 workflow buttons hain. Har ek HTTP 202 return karta hai aur bottom **Jobs
-panel** me stage-wise progress dikhta hai (`queued → running → completed`, outcome
+Collect & run drawer par analysis workflows hain. Har ek HTTP 202 return karta hai aur **Jobs
+drawer** me stage-wise progress dikhta hai (`queued → running → completed`, outcome
 `complete / partial / insufficient_evidence`):
 
 1. **Fetch permitted URLs** — public pages, SSRF-safe, login-wall honestly recorded
@@ -105,6 +102,8 @@ panel** me stage-wise progress dikhta hai (`queued → running → completed`, o
    supported/refuted/insufficient
 6. **Photo-to-location** — EXIF GPS ko "metadata-reported", generic scenes ko "insufficient";
    koi invented pin/university nahi
+7. **Media forensics** — integrity, selected metadata, provenance-marker bytes aur bounded
+   pixel/JPEG indicators; configured image model ho tab raw output, warna `not_configured`
 
 Kisi bhi job ko **Cancel** kar sakte ho — collected evidence delete nahi hota.
 
@@ -124,19 +123,29 @@ Kisi bhi job ko **Cancel** kar sakte ho — collected evidence delete nahi hota.
 
 ---
 
-## 7. Findings, review aur tabs
+## 7. Mission views, findings aur connectors
 
-- **Findings tab** — 4 buckets: Established → Signals/hypotheses → Unknowns/insufficient →
-  Conflicts/rejected. Reviewer/owner har finding par *Accept / Need more / Reject* kar sakte hain.
-- **Comments tab** — coverage statement (non-comparable denominator kabhi 100% nahi banta),
-  har row par **Explain** button, permalink status honestly shown.
-- **Connectors tab** — live providers (YouTube comments import, Google Fact Check search).
-  Key na ho to honestly `not configured`; free keys lene ki poori guide
-  [`REQUIRED_CREDENTIALS.md`](REQUIRED_CREDENTIALS.md) me hai.
-- **Agent tab** — goal choose karo; bounded agent allowlisted tools plan→policy→execute karta
-  hai. External provider (OCR etc.) na ho to step honestly ruk jaata hai — koi fake evidence nahi.
-- **Exports tab** — PDF/HTML/CSV/JSON, scope (all/selected/flagged), redaction mode
-  (redacted vs full). Har artifact ka SHA-256 manifest hota hai aur download link expire hota hai.
+- **Overview** — coverage, source gaps, narrative pulse aur explainable review cues.
+- **Narratives** — representative posts, timelines, earliest-in-corpus aur later observed
+  amplification. Isse platform-wide origin ya common ownership prove nahi hota.
+- **Geospatial** — bundled offline world map aur supplied/reported locations ke aggregates;
+  exact/live person location nahi.
+- **Live OSINT** — DNS, RDAP, web, CT aur Wayback modules select karo. Har source ka success,
+  empty, partial ya failure alag dikhta hai; saved report ka JSON export available hai.
+- **Network & behavior** — observed fact/hypothesis account links aur transparent behavior
+  formula. Automation indicator ko bot probability mat samjho.
+- **Media lab** — authenticated preview, hashes, metadata/pixel observations, model availability
+  aur limitations. No model = no synthetic score.
+- **Findings & review** — Established, Signals, Unknowns, Conflicts ke alawa unmatched categories
+  ke liye triage bucket; har finding exactly once dikhti hai. Reviewer/owner *Accept / Need more /
+  Reject* kar sakte hain aur decision ke baad list refresh hoti hai.
+- **Comments** — coverage statement, per-row explanation aur honest permalink status.
+- **Connectors** — 11-row API/access matrix batata hai ki kya keyless hai, kis cheez ko API key,
+  official approval ya local model chahiye, aur kya unavailable hai. Neeche bounded Mastodon public
+  hashtags, key-gated YouTube comments aur Google Fact Check controls hain. Missing key/access clearly
+  shown; [`REQUIRED_CREDENTIALS.md`](REQUIRED_CREDENTIALS.md).
+- **Agent** — bounded allowlisted plan→policy→execute; unavailable provider par fake evidence nahi.
+- **Exports** — PDF/HTML/CSV/JSON, redaction options, SHA-256 manifest aur expiring downloads.
 
 ---
 
@@ -153,7 +162,7 @@ curl -X POST localhost:8000/api/v1/cases -H "Authorization: Bearer dev-token-own
 # bounded agent chalao
 curl -X POST localhost:8000/api/v1/cases/$CID/agent/run \
   -H "Authorization: Bearer dev-token-owner" -H "Content-Type: application/json" \
-  -d '{"goal":"coordination","client_idempotency_key":"demo-0001"}'
+  -d '{"goal":"coordination","client_idempotency_key":"example-0001"}'
 ```
 
 Job progress SSE se milta hai: `GET /api/v1/cases/{id}/events` (reconnect `Last-Event-ID` se).
@@ -163,14 +172,22 @@ Job progress SSE se milta hai: `GET /api/v1/cases/{id}/events` (reconnect `Last-
 ## 9. Testing aur evaluation
 
 ```bash
-make test       # 30 pytest tests — acceptance gates, security, agent, adversarial fixtures
+make test       # 58 pytest tests — acceptance, security, intelligence, config, providers
 make eval       # fixture-based evaluation harness (label recall, match categories, controls)
+
+cd frontend
+npm run build
+npx playwright install chromium
+npm run test:e2e  # API :8000 + Vite :5173 pehle start karo; 4 browser checks
 ```
 
 ## 10. Yaad rakhne wali limitations (honest by design)
 
-- Live Instagram/Facebook/YouTube connectors, OCR, reverse image search, LLM, Jev **disabled**
-  hain — UI unhe "not configured" dikhata hai; mock ko real evidence nahi banaya gaya.
+- Instagram/Facebook, approval-gated Reddit, OCR, reverse image search aur unconfigured LLM/model
+  capabilities ko UI "not configured / access required" dikhata hai. YouTube/Fact Check real hain
+  lekin API key chahiye; Mastodon public hashtag aur passive OSINT keyless ho sakte hain.
+- Analytics continuous platform-wide monitor nahi; current collected case corpus par on-demand hain.
+  Bot/deepfake probability, video deepfake verdict ya common-owner attribution invent nahi hota.
 - Comment classifier transparent but **uncalibrated** hai — production accuracy claim se pehle
   representative Hindi/Hinglish labeled data par precision/recall/calibration maapo.
 - Dev tokens real auth nahi; deployment se pehle IdP, TLS, DPDP/legal review zaroori.
