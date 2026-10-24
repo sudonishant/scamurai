@@ -13,7 +13,7 @@ import json
 
 from sqlalchemy.orm import Session
 
-from ..models import AnalysisRun, LocationFinding, MediaAsset, Place
+from ..models import AnalysisRun, GeoObservation, LocationFinding, MediaAsset, Place
 from ..registry import MEDIA, PLACE
 from . import graph, images, storage
 
@@ -36,6 +36,12 @@ def analyze_media(db: Session, case_id: str, media: MediaAsset,
         )
         db.add(place)
         db.flush()
+        db.add(GeoObservation(
+            case_id=case_id, media_asset_id=media.id,
+            location_name=f"EXIF metadata point ({exif['latitude']:.2f}, {exif['longitude']:.2f})",
+            latitude=float(exif["latitude"]), longitude=float(exif["longitude"]),
+            precision="camera_position_metadata", source="exif_metadata", observed_at=None,
+        ))
         graph.upsert_node(db, case_id, PLACE, place.id, place.name,
                           {"precision": place.precision, "status": "metadata_reported"})
         graph.add_edge(db, case_id, MEDIA, media.id, PLACE, place.id,

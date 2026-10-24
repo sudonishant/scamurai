@@ -32,6 +32,10 @@ interface Props {
 export default function GraphCanvas({ data, onSelectNode, onSelectEdge, refreshToken }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
+  const onSelectNodeRef = useRef(onSelectNode);
+  const onSelectEdgeRef = useRef(onSelectEdge);
+  onSelectNodeRef.current = onSelectNode;
+  onSelectEdgeRef.current = onSelectEdge;
 
   useEffect(() => {
     if (!hostRef.current) return;
@@ -80,17 +84,17 @@ export default function GraphCanvas({ data, onSelectNode, onSelectEdge, refreshT
     cy.on("tap", "node", (evt) => {
       const id = evt.target.id();
       const node = data.nodes.find((n) => n.id === id);
-      if (node) onSelectNode(node);
+      if (node) onSelectNodeRef.current(node);
     });
     cy.on("tap", "edge", (evt) => {
       const id = evt.target.id();
       const edge = data.edges.find((e) => e.id === id);
-      if (edge) onSelectEdge(edge);
+      if (edge) onSelectEdgeRef.current(edge);
     });
     cyRef.current = cy;
     return () => { cy.destroy(); cyRef.current = null; };
-    // refreshToken forces a full rebuild when case data changes
-  }, [data, refreshToken, onSelectNode, onSelectEdge]);
+    // Rebuild only for data/explicit refresh changes. Inline callback props must not reset the layout.
+  }, [data, refreshToken]);
 
   const fit = () => cyRef.current?.fit(undefined, 24);
   const zoomIn = () => cyRef.current?.zoom(cyRef.current.zoom() * 1.25);

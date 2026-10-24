@@ -21,6 +21,7 @@ from ..registry import MEDIA
 from . import claims as claims_svc
 from . import comments as comments_svc
 from . import connectors, coordination, images, location
+from . import media_forensics as media_forensics_svc
 from . import storage, graph
 from .jobs import JobContext
 from .findings import create_finding
@@ -247,6 +248,29 @@ def location_analysis(ctx: JobContext) -> dict:
     return {"counts": statuses, "outcome": "complete"}
 
 
+# --------------------------------------------------------------------- 7. media forensics
+def media_forensics(ctx: JobContext) -> dict:
+    db = ctx.db
+    assets = db.scalars(select(MediaAsset).where(
+        MediaAsset.case_id == ctx.case_id, MediaAsset.kind == "original")).all()
+    run = _analysis_run(ctx, "media_forensics_and_optional_configured_model",
+                        {"deepfake_model_configured": bool(media_forensics_svc.settings.deepfake_model_id)})
+    model_success = 0
+    for asset in assets:
+        ctx.checkpoint()
+        ctx.stage(f"media forensics: {asset.filename[:60]}")
+        record = media_forensics_svc.analyze_asset(db, ctx.case_id, asset, run)
+        if json.loads(record.model_result).get("status") == "successful":
+            model_success += 1
+    run.status = "completed"
+    run.ended_at = utcnow()
+    return {
+        "counts": {"media_screened": len(assets), "configured_model_results": model_success},
+        "outcome": "complete" if assets else "insufficient_evidence",
+        "limitations": [] if assets else ["Upload an authorized image before running media forensics."],
+    }
+
+
 WORKFLOWS = {
     "import_pipeline": import_pipeline,
     "image_matching": image_matching,
@@ -254,4 +278,5 @@ WORKFLOWS = {
     "coordination_detection": coordination_detection,
     "claim_workflow": claim_workflow,
     "location_analysis": location_analysis,
+    "media_forensics": media_forensics,
 }

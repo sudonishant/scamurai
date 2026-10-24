@@ -8,10 +8,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import SourceAccess
+from ..models import EvidenceRecord, SourceAccess
 from ..security import require_case
-from ..services import importer
+from ..services import graph, importer, storage
 from ..services.providers import factcheck as fc_provider
+from ..services.providers import mastodon as mastodon_provider
 from ..services.providers import youtube as yt_provider
 
 router = APIRouter(prefix="/api/v1/cases/{case_id}/connectors", tags=["connectors"])
@@ -20,6 +21,12 @@ router = APIRouter(prefix="/api/v1/cases/{case_id}/connectors", tags=["connector
 class YouTubeImport(BaseModel):
     url: str = Field(min_length=11, max_length=2000)
     max_pages: int = Field(default=3, ge=1, le=10)
+
+
+class MastodonImport(BaseModel):
+    instance: str = Field(min_length=3, max_length=300)
+    hashtag: str = Field(min_length=1, max_length=100)
+    limit: int = Field(default=40, ge=1, le=40)
 
 
 class FactCheckQuery(BaseModel):
@@ -61,6 +68,46 @@ def youtube_import(body: YouTubeImport,
         detail=json.dumps({"video_id": result.video_id, **summary, **meta})))
     db.commit()
     return {"video_id": result.video_id, **summary}
+
+
+@router.post("/mastodon/import", status_code=201)
+def mastodon_import(body: MastodonImport,
+                    ctx=Depends(require_case({"analyst", "owner"})),
+                    db: Session = Depends(get_db)):
+    """Import one bounded public hashtag page through the instance's official API."""
+    try:
+        result = mastodon_provider.fetch_public_hashtag(body.instance, body.hashtag, body.limit)
+    except mastodon_provider.MastodonError as exc:
+        code = 422 if exc.outcome == "validation_error" else 502
+        db.add(SourceAccess(case_id=ctx.case.id, provider="mastodon", method="timelines.tag",
+                            capability="public_posts:read", outcome=exc.outcome, detail=exc.detail))
+        db.commit()
+        raise HTTPException(status_code=code, detail=f"{exc.outcome}: {exc.detail}") from exc
+
+    raw = result["raw"].encode("utf-8")
+    evidence = EvidenceRecord(
+        case_id=ctx.case.id, source_url=result["source_url"], method="mastodon_public_api_v1",
+        object_hash=storage.sha256_hex(raw), source_kind="public_api_snapshot",
+        note=result["coverage_note"],
+    )
+    db.add(evidence)
+    db.flush()
+    key = storage.put_object(ctx.case.id, f"mastodon/{evidence.id}.json", raw)
+    evidence.snapshot_key = key
+    graph.evidence_node(db, evidence)
+    counts = importer.import_posts_bundle(db, ctx.case.id, ctx.user.id, result["bundle"], None)
+    outcome = "successful" if counts["posts"] else "successful_empty"
+    db.add(SourceAccess(
+        case_id=ctx.case.id, provider=f"mastodon:{result['instance']}", method="timelines.tag",
+        capability="public_posts:read", outcome=outcome,
+        detail=json.dumps({"hashtag": result["hashtag"], "statuses_returned": result["statuses_returned"],
+                           "skipped_reblogs": result["skipped_reblogs"], **counts,
+                           "coverage": result["coverage_note"]})))
+    db.commit()
+    return {"instance": result["instance"], "hashtag": result["hashtag"],
+            "statuses_returned": result["statuses_returned"],
+            "skipped_reblogs": result["skipped_reblogs"], "evidence_id": evidence.id,
+            **counts, "coverage": result["coverage_note"]}
 
 
 @router.post("/factcheck/search")

@@ -10,13 +10,12 @@ from __future__ import annotations
 
 import socket
 from dataclasses import dataclass, field
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import httpx
 
 from ..config import get_settings
-from ..security import _BLOCKED_NETWORKS, _METADATA_HOSTS
-import ipaddress
+from ..security import _METADATA_HOSTS, ip_is_blocked
 
 settings = get_settings()
 
@@ -49,20 +48,19 @@ class FetchResult:
     provider: str = "generic-web"
     is_mock: bool = False
     access_observations: list[str] = field(default_factory=list)
+    headers: dict[str, str] = field(default_factory=dict)
+    redirect_history: list[dict] = field(default_factory=list)
 
 
 def _ip_is_blocked(host: str) -> bool:
-    if host in _METADATA_HOSTS:
+    host = host.rstrip(".").lower()
+    if host in _METADATA_HOSTS or host.endswith(".internal") or host == "localhost":
         return True
     try:
         infos = socket.getaddrinfo(host, None)
     except OSError:
         return True
-    for info in infos:
-        ip = ipaddress.ip_address(info[4][0])
-        if any(ip in net for net in _BLOCKED_NETWORKS):
-            return True
-    return False
+    return any(ip_is_blocked(info[4][0]) for info in infos)
 
 
 def check_capabilities() -> list[Capability]:
@@ -74,6 +72,21 @@ def check_capabilities() -> list[Capability]:
         Capability("generic-web", True,
                    ["fetch_post"], "configured",
                    "Permitted public-page fetch with SSRF guards; no login bypass, bounded size."),
+        Capability("public-infrastructure-osint", True,
+                   ["dns", "rdap", "web_metadata", "certificate_transparency", "wayback"],
+                   "configured",
+                   "Keyless bounded public APIs; per-source failures are preserved and reports are hash-snapshotted."),
+        Capability("mastodon", True,
+                   ["fetch_public_hashtag_timeline"], "configured_public_access_dependent",
+                   "Official instance API; public preview can be disabled. One page, no private statuses or login bypass."),
+        Capability("media-forensics", True,
+                   ["metadata", "jpeg_residuals", "provenance_markers"], "configured",
+                   "Deterministic screening observations; not a standalone manipulation verdict."),
+        Capability("deepfake-model", bool(settings.deepfake_model_id),
+                   ["image_classification"], "configured" if settings.deepfake_model_id else "not_configured",
+                   "Raw scores only from the explicitly configured local model; representative calibration is still required."
+                   if settings.deepfake_model_id else
+                   "No model score is invented. Set SCAMURAI_DEEPFAKE_MODEL_ID and install optional transformers dependencies."),
         Capability("instagram", False,
                    ["fetch_post", "fetch_comments"], "access_required",
                    "Meta App Review/Advanced Access and OAuth required; import available meanwhile."),
@@ -122,54 +135,93 @@ def provider_for_url(url: str) -> str:
     return "generic-web"
 
 
-def fetch_permitted_source(url: str, timeout: float = 8.0, max_bytes: int = 2_000_000) -> FetchResult:
-    """Safe public-page fetch. SSRF rules are re-checked after every redirect."""
+def fetch_permitted_source(
+    url: str,
+    timeout: float = 8.0,
+    max_bytes: int = 2_000_000,
+    max_text_chars: int = 200_000,
+    allowed_platform: str | None = None,
+    detect_login_wall: bool = True,
+) -> FetchResult:
+    """Bounded public-page fetch with explicit per-hop policy checks.
+
+    Redirects are handled manually (maximum four) so every target is checked.
+    Non-global IPs, credentialed URLs and non-HTTP schemes are rejected. For a
+    hostile multi-tenant deployment, add DNS pinning/network egress controls as
+    described in SECURITY.md; URL validation alone is not a complete sandbox.
+    """
     provider = provider_for_url(url)
-    if provider != "generic-web":
+    if provider != "generic-web" and provider != allowed_platform:
         return FetchResult(outcome="not_configured", provider=provider,
                            detail="Platform connector access required; authorized import is available.")
 
-    def _guard(request: httpx.Request) -> None:
-        host = urlparse(str(request.url)).hostname or ""
-        if _ip_is_blocked(host):
-            raise httpx.RequestError("Blocked redirect target (SSRF policy)")
-
+    current_url = url
+    redirects: list[dict] = []
     try:
-        with httpx.Client(follow_redirects=True, timeout=timeout, event_hooks={"request": [_guard]},
-                          headers={"User-Agent": "scamurai-investigation/0.1 (+authorized-use)"}) as client:
-            with client.stream("GET", url) as resp:
-                if resp.status_code in (401, 403):
-                    return FetchResult("login_required", resp.status_code, provider=provider,
-                                       detail="Access denied or login wall observed")
-                if resp.status_code == 429:
-                    return FetchResult("rate_limited", 429, provider=provider,
-                                       detail="Provider rate limit honored; no retry loop")
-                if resp.status_code >= 500:
-                    return FetchResult("unavailable", resp.status_code, provider=provider,
-                                       detail="Upstream server error")
-                if resp.status_code >= 400:
-                    return FetchResult("unavailable", resp.status_code, provider=provider,
-                                       detail="Non-success status")
-                chunks: list[bytes] = []
-                total = 0
-                for chunk in resp.iter_bytes():
-                    total += len(chunk)
-                    if total > max_bytes:
+        with httpx.Client(
+            follow_redirects=False,
+            timeout=timeout,
+            headers={"User-Agent": "Scamurai/0.2 (+authorized-public-research)"},
+        ) as client:
+            for hop in range(5):
+                parsed = urlparse(current_url)
+                host = (parsed.hostname or "").rstrip(".").lower()
+                if (parsed.scheme not in {"http", "https"} or not host or parsed.username
+                        or parsed.password or _ip_is_blocked(host)):
+                    return FetchResult("unavailable", provider=provider,
+                                       detail="Blocked non-public or invalid fetch target")
+                with client.stream("GET", current_url) as resp:
+                    response_headers = {k.lower(): v for k, v in resp.headers.items()
+                                        if k.lower() not in {"set-cookie", "authorization"}}
+                    if resp.status_code in {301, 302, 303, 307, 308}:
+                        location = resp.headers.get("location")
+                        if not location or hop >= 4:
+                            return FetchResult("unavailable", resp.status_code, provider=provider,
+                                               detail="Redirect limit or missing redirect destination")
+                        next_url = urljoin(str(resp.url), location)
+                        redirects.append({"status": resp.status_code, "from": str(resp.url), "to": next_url})
+                        current_url = next_url
+                        continue
+                    if resp.status_code in (401, 403):
+                        return FetchResult("login_required", resp.status_code, provider=provider,
+                                           detail="Access denied, robots policy or login wall observed",
+                                           headers=response_headers, redirect_history=redirects)
+                    if resp.status_code == 429:
+                        return FetchResult("rate_limited", 429, provider=provider,
+                                           detail="Provider rate limit honored; no retry loop",
+                                           headers=response_headers, redirect_history=redirects)
+                    if resp.status_code >= 500:
                         return FetchResult("unavailable", resp.status_code, provider=provider,
-                                           detail="Response exceeded bounded size")
-                    chunks.append(chunk)
-                body = b"".join(chunks)
-                text = body.decode(resp.encoding or "utf-8", errors="replace")
-                if not text.strip():
-                    return FetchResult("successful_empty", resp.status_code,
-                                       resp.headers.get("content-type"), provider=provider)
-                login_markers = ("log in", "login", "sign in", "enable javascript")
-                if any(m in text.lower()[:3000] for m in login_markers) and len(text) < 4000:
-                    return FetchResult("login_required", resp.status_code,
-                                       resp.headers.get("content-type"), text, str(resp.url),
-                                       "Page content indicates a login wall", provider)
-                return FetchResult("successful", resp.status_code,
-                                   resp.headers.get("content-type"), text[:200_000],
-                                   str(resp.url), "Public page fetched within policy", provider)
-    except httpx.RequestError as exc:
-        return FetchResult("unavailable", detail=f"Fetch failed: {exc.__class__.__name__}", provider=provider)
+                                           detail="Upstream server error", headers=response_headers,
+                                           redirect_history=redirects)
+                    if resp.status_code >= 400:
+                        return FetchResult("unavailable", resp.status_code, provider=provider,
+                                           detail="Source returned a non-success status",
+                                           headers=response_headers, redirect_history=redirects)
+                    chunks: list[bytes] = []
+                    total = 0
+                    for chunk in resp.iter_bytes():
+                        total += len(chunk)
+                        if total > max_bytes:
+                            return FetchResult("unavailable", resp.status_code, provider=provider,
+                                               detail="Response exceeded bounded size",
+                                               headers=response_headers, redirect_history=redirects)
+                        chunks.append(chunk)
+                    body = b"".join(chunks)
+                    text = body.decode(resp.encoding or "utf-8", errors="replace")
+                    common = dict(status_code=resp.status_code,
+                                  content_type=resp.headers.get("content-type"),
+                                  final_url=str(resp.url), provider=provider,
+                                  headers=response_headers, redirect_history=redirects)
+                    if not text.strip():
+                        return FetchResult("successful_empty", text="", **common)
+                    login_markers = ("log in", "login", "sign in", "enable javascript")
+                    if detect_login_wall and any(m in text.lower()[:3000] for m in login_markers) and len(text) < 4000:
+                        return FetchResult("login_required", text=text[:max_text_chars],
+                                           detail="Page content indicates a login wall", **common)
+                    return FetchResult("successful", text=text[:max_text_chars],
+                                       detail="Public source fetched within policy", **common)
+            return FetchResult("unavailable", provider=provider, detail="Redirect processing ended unexpectedly")
+    except (httpx.RequestError, httpx.DecodingError) as exc:
+        return FetchResult("unavailable", detail=f"Fetch failed: {exc.__class__.__name__}",
+                           provider=provider, redirect_history=redirects)

@@ -100,6 +100,23 @@ _BLOCKED_NETWORKS = (
 _METADATA_HOSTS = {"metadata.google.internal", "metadata", "169.254.169.254"}
 
 
+def ip_is_blocked(value: str) -> bool:
+    """Reject every non-global destination, including IPv6 and mapped IPv4.
+
+    The older fixed CIDR list is retained for compatibility, while is_global
+    closes gaps such as CGNAT, benchmarking, multicast and reserved ranges.
+    Network-layer egress restrictions and DNS pinning are still recommended for
+    internet-facing multi-tenant deployment (see docs/SECURITY.md).
+    """
+    try:
+        ip = ipaddress.ip_address(value.split("%", 1)[0])
+    except ValueError:
+        return True
+    if getattr(ip, "ipv4_mapped", None) is not None:
+        return ip_is_blocked(str(ip.ipv4_mapped))
+    return (not ip.is_global) or any(ip in net for net in _BLOCKED_NETWORKS)
+
+
 def assert_public_url(url: str) -> str:
     """Validate an outbound URL against SSRF rules *before* any fetch.
 
@@ -112,16 +129,18 @@ def assert_public_url(url: str) -> str:
     host = parsed.hostname
     if not host:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "URL has no host")
-    if host in _METADATA_HOSTS:
+    host = host.rstrip(".").lower()
+    if parsed.username or parsed.password:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Credentialed URLs are not allowed")
+    if host in _METADATA_HOSTS or host.endswith(".internal") or host == "localhost":
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Blocked target")
     try:
         infos = socket.getaddrinfo(host, None)
     except OSError:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Host cannot be resolved")
     for info in infos:
-        ip = ipaddress.ip_address(info[4][0])
-        if any(ip in net for net in _BLOCKED_NETWORKS):
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Blocked private/link-local target")
+        if ip_is_blocked(info[4][0]):
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Blocked non-public target")
     return url
 
 

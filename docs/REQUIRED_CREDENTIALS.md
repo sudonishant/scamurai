@@ -1,116 +1,147 @@
-# Credentials Guide (Hinglish) — kya chahiye, kahan milega, kaise lagega
+# Credentials and access guide (Hinglish)
 
-_Sab kuch October 2026 ke current free-tier rules ke hisaab se verify kiya gaya hai._
+Scamurai ka core investigation workflow bina external API key ke chal sakta hai: authorized
+CSV/JSON/text/image imports, local media matching/screening, narrative/network/geo analytics,
+coordination candidates, claims, deterministic agent tools aur exports. Provider key ya approval
+na ho to UI `not configured`, `access required`, ya actual failure dikhata hai—synthetic result nahi.
 
-Platform bina kisi key ke bhi poora kaam karta hai (local import, image matching, coordination,
-agent, exports). Keys sirf **live provider** features on karti hain. Key na ho to UI honestly
-`not configured` dikhata hai — koi fake data kabhi nahi.
+> Provider pricing, free tiers, quotas aur approval policies badal sakte hain. Neeche di gayi official
+> documentation ko current source of truth maano; kisi free quota ya approval timeline ki guarantee nahi.
 
----
+## Access requirements at a glance
 
-## 1. LLM / Agent ke liye free API (3 options, koi bhi ek)
+| Capability | Kya chahiye |
+|---|---|
+| Authorized imports, local analytics, graph, geo, early-warning rules | Koi API key nahi |
+| DNS, RDAP, bounded web metadata, crt.sh, Wayback | Koi API key nahi; public-provider limits apply |
+| Mastodon public hashtag | Instance public preview allow kare to key nahi |
+| YouTube comments/replies | YouTube Data API v3 key + available quota |
+| Google published fact-check search | Fact Check Tools API key |
+| External LLM for bounded agent | Optional Groq/OpenRouter/Gemini credential; deterministic local tools keyless |
+| Synthetic-image classifier | Local Hugging Face model + optional `transformers`/`torch`; API key by default nahi |
+| Instagram/Facebook/Reddit restricted collection | Official reviewed permissions/OAuth/approval; unconfigured build live access claim nahi karti |
+| OCR, reverse image search, video deepfake pipeline | Is build me available nahi; koi substitute output nahi |
 
-### Option A — Groq (recommended: sabse simple, no credit card)
-- **Kya milta hai:** OpenAI-compatible chat API, free models `gpt-oss-20b`, `gpt-oss-120b`,
-  `qwen3.8-27b`. Limit ~30 requests/min, 1,000 requests/day per model, 200k tokens/day.
-- **Kaise:**
-  1. https://console.groq.com pe Google/GitHub se sign up (card nahi maangta).
-  2. Left menu → **API Keys → Create API Key** → key copy kar lo (`gsk_...` se start hoti hai).
-- **`.env` me daalo:**
-  ```
-  SCAMURAI_LLM_PROVIDER=groq
-  SCAMURAI_LLM_API_KEY=gsk_...yahan...
-  SCAMURAI_LLM_BASE_URL=https://api.groq.com/openai/v1
-  SCAMURAI_LLM_MODEL_ID=gpt-oss-20b
-  ```
+## 1. YouTube Data API v3 — public comments/replies
 
-### Option B — Google Gemini AI Studio (free, ek caveat)
-- **Kya milta hai:** Flash/Flash-Lite models free; RPM ~10–30, daily quota 250–1500 requests
-  (midnight Pacific time reset). Image/"Nano Banana" wale paid hain.
-- **Caveat:** free-tier prompts Google ki training me use ho sakte hain — isliye sensitive case
-  data ke liye Groq behtar hai.
-- **Kaise:** https://aistudio.google.com → **Get API key** → `AIza...` key.
-- **`.env` me daalo:**
-  ```
-  SCAMURAI_LLM_PROVIDER=gemini
-  SCAMURAI_GEMINI_API_KEY=AIza...yahan...
-  SCAMURAI_LLM_MODEL_ID=gemini-flash
-  ```
+Official guide: <https://developers.google.com/youtube/v3/getting-started>
 
-### Option C — OpenRouter (ek key, bahut saare free models)
-- **Kya milta hai:** `:free` wale model IDs (e.g. `deepseek/deepseek-chat-v3.1:free`), OpenAI-
-  compatible. Limit 20 RPM / 50 requests/day bina payment ke; $10 ek baar top-up karo to 1,000/day.
-- **Kaise:** https://openrouter.ai → sign up → **Keys → Create Key**.
-- **`.env` me daalo:**
-  ```
-  SCAMURAI_LLM_PROVIDER=openrouter
-  SCAMURAI_LLM_API_KEY=sk-or-...
-  SCAMURAI_LLM_BASE_URL=https://openrouter.ai/api/v1
-  SCAMURAI_LLM_MODEL_ID=deepseek/deepseek-chat-v3.1:free
-  ```
+1. Google Cloud project banao aur **YouTube Data API v3** enable karo.
+2. **Credentials → API key** se key banao; possible ho to key ko required API tak restrict karo.
+3. Backend `.env` me set karo:
+   ```dotenv
+   SCAMURAI_YOUTUBE_API_KEY=your_key_here
+   ```
+4. Case → **Connectors → YouTube public comments** me video URL ya 11-character ID do.
 
-> Safety by design: koi bhi LLM call me analyzed material hamesha **data** ke roop me jaata hai,
-> system prompt use instruction maanne se rokta hai. Key kabhi browser bundle, logs ya exports me
-> nahi jaati.
+Disabled comments, permission failure, quota/rate limit aur transport failure alag outcomes rehte hain.
+Inhe successful empty result nahi maana jata. Actual quota/cost ke liye official quota documentation dekho:
+<https://developers.google.com/youtube/v3/determine_quota_cost>
 
----
+## 2. Google Fact Check Tools API — published reviews
 
-## 2. YouTube connector (comments live import) — free, API key only
-- **Kya milta hai:** kisi bhi public video ke comments + replies, official Data API v3 se.
-  Quota 10,000 units/day; ek comment page = sirf 1 unit (100 comments/page). OAuth nahi chahiye.
-- **Kaise:**
-  1. https://console.cloud.google.com → naya project banao (e.g. "scamurai").
-  2. **APIs & Services → Enable APIs and Services → "YouTube Data API v3" → Enable.**
-  3. **Credentials → Create Credentials → API key** → key copy karo.
-  4. (Recommended) key pe **Edit → API restrictions → YouTube Data API v3** select kar do.
-- **`.env` me daalo:** `SCAMURAI_YOUTUBE_API_KEY=AIza...`
-- UI: case kholo → **Connectors tab → YouTube comments import**. Video URL ya 11-char ID do.
-  Comments disabled / quota khatam hone par system honestly `permission_denied` / `rate_limited`
-  record karta hai — chup-chaap khaali result nahi dikhata.
+Official guide: <https://developers.google.com/fact-check/tools/api/>
 
-## 3. Google Fact Check Tools API — free, claim verification
-- **Kya milta hai:** published fact-checkers ke ratings (False/Misleading/etc.) unke source URL ke
-  saath. Result na milna = "koi published fact-check nahi", ye kabhi proof nahi ki claim jhooth hai.
-- **Kaise:** same Google Cloud project → **Enable "Fact Check Tools API"** → ek nayi API key banao
-  ya upar wali key me dono APIs allow kar do.
-- **`.env` me daalo:** `SCAMURAI_GOOGLE_FACTCHECK_API_KEY=AIza...`
-- UI: Connectors tab → **Fact Check search**.
+1. Google Cloud project me **Fact Check Tools API** enable karo.
+2. API key banao/restrict karo aur backend `.env` me set karo:
+   ```dotenv
+   SCAMURAI_GOOGLE_FACTCHECK_API_KEY=your_key_here
+   ```
+3. Case → **Connectors → Published fact-check search** use karo.
 
-## 4. Instagram (Meta Graph API) — free, par conditions hain
-- Sirf **Business/Creator** accounts ke liye. Personal account pe nahi chalega.
-- **Standard Access** turant milta hai aur apne/tester accounts ke liye kaam karta hai (demo ke liye
-  perfect). Kisi bhi random account ke comments API se nahi milte — ye Meta ki 2026 policy hai.
-- **Advanced Access** (production, saare accounts) ke liye App Review (~20 din) + Business
-  Verification + privacy-policy URL + screencast chahiye.
-- **Kaise:** https://developers.facebook.com → App banao → **Instagram Graph API** add karo →
-  Instagram Business/Creator account connect karo → access token (60-din refresh cycle).
-- Agar aapka use-case sirf apne brand account ke comments monitor karna hai to ye viable hai;
-  arbitrary OSINT scraping ke liye nahi. Batana, adapter wire kar denge.
+Published match source evidence hai, automatic truth verdict nahi. No match ka matlab claim false ya true
+nahi; claim undetermined rehta hai.
 
-## 5. Reddit — technically free, practically approval-gated
-- 2025 ke **Responsible Builder Policy** ke baad self-serve app registration band hai; naye apps ko
-  manual approval (2–4 hafte, kabhi-kabhi silent reject) chahiye. Free tier non-commercial,
-  100 queries/min. Unauthenticated access May 2026 se poori tarah blocked.
-- **Kaise (agar phir bhi chahiye):** https://www.reddit.com/prefs/apps → **are you a developer?
-  create an app… → script type** → client ID + secret + descriptive User-Agent.
-- **`.env`:** `SCAMURAI_REDDIT_CLIENT_ID`, `SCAMURAI_REDDIT_CLIENT_SECRET`, `SCAMURAI_REDDIT_USER_AGENT`.
-- Mera recommendation: Reddit ko primary source mat banao; CSV/JSON import se kaam chal jayega.
+## 3. Optional external LLM — bounded agent
 
----
+Local deterministic agent tools ke liye LLM key zaroori nahi. External model use karna ho to exactly one
+provider configure karo. Model ID aur endpoint provider ke current docs se lo; examples ko availability
+guarantee mat samjho.
 
-## Aapko mujhe kya dena hai (minimum useful set)
+### Groq (OpenAI-compatible)
 
-1. **Groq API key** (`gsk_...`) — agent ke LLM steps ke liye. _(ya Gemini/OpenRouter key — koi ek)_
-2. **YouTube Data API key** (`AIza...`) — live comment import ke liye.
-3. **Fact Check API key** (`AIza...`) — claim verification ke liye. (2 aur 3 alag keys ho ya ek
-   restricted key — dono chalega.)
+Official docs: <https://console.groq.com/docs/quickstart>
 
-Bas itne se platform ke saare free live features chalu ho jayenge. Instagram/Reddit optional hain.
+```dotenv
+SCAMURAI_LLM_PROVIDER=groq
+SCAMURAI_LLM_API_KEY=your_groq_key
+SCAMURAI_LLM_BASE_URL=https://api.groq.com/openai/v1
+SCAMURAI_LLM_MODEL_ID=provider_supported_model_id
+```
 
-## Key kaise lagti hai (security)
-- Saari keys `/home/user/scamurai/.env` me jaati hain (file `.gitignore` me hai — git me kabhi commit
-  nahi hogi, GitHub repo me nahi jayegi).
-- Key sirf backend process ke paas rehti hai; frontend kabhi usse touch nahi karta.
-- Backend restart (`make run-api`) ke baad Connectors tab me status `configured` dikhega.
-- Agar key chat me bhejte ho to main use seedha `.env` me likh dunga, kisi file me nahi; baad me
-  provider dashboard se rotate/revoke kar sakte ho.
+### OpenRouter (OpenAI-compatible)
+
+Official docs: <https://openrouter.ai/docs/quickstart>
+
+```dotenv
+SCAMURAI_LLM_PROVIDER=openrouter
+SCAMURAI_LLM_API_KEY=your_openrouter_key
+SCAMURAI_LLM_BASE_URL=https://openrouter.ai/api/v1
+SCAMURAI_LLM_MODEL_ID=provider_supported_model_id
+```
+
+### Gemini
+
+Official docs: <https://ai.google.dev/gemini-api/docs/quickstart>
+
+```dotenv
+SCAMURAI_LLM_PROVIDER=gemini
+SCAMURAI_GEMINI_API_KEY=your_gemini_key
+SCAMURAI_LLM_MODEL_ID=provider_supported_model_id
+```
+
+Sensitive case material bhejne se pehle provider ka data-use/retention policy, region, contract aur
+organizational approval check karo. Provider content untrusted **data** hai, agent instruction nahi.
+
+## 4. Optional local image classifier
+
+Deterministic hashes/metadata/pixel screening keyless chalti hai. Synthetic-image labels chahiye to:
+
+1. `transformers` aur compatible `torch` optional dependencies install karo.
+2. Image-classification model ka model card, license, labels aur intended use review karo.
+3. Backend `.env` me configure karo:
+   ```dotenv
+   SCAMURAI_DEEPFAKE_MODEL_ID=exact_hugging_face_model_id
+   SCAMURAI_DEEPFAKE_MODEL_REVISION=optional_pinned_revision
+   ```
+4. Representative local data, unseen generators aur compressed media par false positives/negatives aur
+   calibration measure karo.
+
+No configured model = `not_configured` aur `synthetic_score = null`. Load/inference failure = `unavailable`.
+Raw model label manipulation, authenticity ya video-deepfake verdict nahi hai.
+
+## 5. Keyless public sources—fir bhi limits hain
+
+- **Mastodon:** selected instance ki official public hashtag API; ek bounded page, sirf jab public preview
+  permitted ho. Private/unlisted coverage nahi. Docs: <https://docs.joinmastodon.org/client/public/>
+- **DNS:** Google Public DNS JSON; resolver view point-in-time hai. Docs:
+  <https://developers.google.com/speed/public-dns/docs/doh/json>
+- **RDAP:** IANA bootstrap + authoritative registry service; website intent prove nahi karta.
+- **Web/CT/Wayback:** bounded public observations; login wall, rate limit, no snapshot ya missing CT name
+  ko successful empty/negative proof nahi banate.
+
+Publicly accessible hone ka matlab unrestricted scraping, redistribution ya privacy obligation se exemption
+nahi. Platform terms, robots/policy, authorization aur applicable law operator ko check karne hain.
+
+## 6. Official approval / currently unavailable
+
+- **Instagram/Facebook:** restricted collection ke liye Meta ke current official permissions, OAuth, App
+  Review aur account-type requirements apply hote hain. Is build me unconfigured live success claim nahi.
+  Start: <https://developers.facebook.com/docs/instagram-platform/>
+- **Reddit:** credentials alone approved access establish nahi karte. Current official API terms/approval
+  verify karo: <https://developers.reddit.com/docs>. Is build me full live Reddit collector available nahi.
+- **OCR/reverse image search:** actual provider/pipeline configured nahi; transcript ya search result invent
+  nahi hota.
+- **Video deepfakes:** image classifier ko video support kehna galat hoga; built-in video pipeline nahi.
+
+Authorized JSON/CSV import in cases me available reh sakta hai, lekin wo live platform collection nahi hai.
+
+## 7. Key kaise lagti hai (security)
+
+1. Repository root ki `.env.example` ko `.env` me copy karke backend environment configure karo. `.env` ko
+   commit mat karo.
+2. `SCAMURAI_` canonical prefix hai. Purane `PS03_` names supported hain; dono ho to canonical value wins.
+3. Key sirf backend process ke paas rehti hai; browser bundle, prompts, exports aur logs me nahi daalo.
+4. Backend restart karke **Connectors → Source health** me non-secret configured state verify karo.
+5. Key kabhi chat/ticket/screenshot me share mat karo. Expose ho jaye to provider dashboard se rotate/revoke karo.
+6. Production me secret manager, least privilege, TLS, IdP aur provider-specific data-governance review use karo.

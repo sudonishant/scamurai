@@ -12,7 +12,7 @@ class UserOut(BaseModel):
     id: str
     email: str
     name: str
-    role_hint: str = "demo user"
+    role_hint: str = "development user"
 
 
 class CaseCreate(BaseModel):
@@ -93,6 +93,7 @@ class RunCreate(BaseModel):
         "coordination_detection",
         "claim_workflow",
         "location_analysis",
+        "media_forensics",
     ]
     input_ids: list[str] = Field(default_factory=list)
     date_range: dict[str, datetime | None] = Field(default_factory=dict)

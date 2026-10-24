@@ -18,6 +18,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
+    Float,
     String,
     Text,
     UniqueConstraint,
@@ -48,7 +49,7 @@ class User(Base, TimestampMixin):
     id: Mapped[str] = uuid_pk()
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(255))
-    # Demo token — development only; real deployments use an external IdP.
+    # Development token only; real deployments use an external IdP.
     dev_token: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
 
 
@@ -359,6 +360,61 @@ class CommentAnalysis(Base):
     suggested_action: Mapped[str] = mapped_column(String(120), default="human_review")
     model_version: Mapped[str] = mapped_column(String(120), default="local-rules-v1")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+# --------------------------------------------------------------------------- OSINT / analytics evidence
+class OsintReport(Base):
+    """Immutable, source-attributed public-infrastructure investigation report.
+
+    Provider responses are stored as a versioned JSON document so the UI never
+    has to substitute synthetic values when a source fails. Each module keeps its
+    own outcome, collection time, limitations and source URL.
+    """
+    __tablename__ = "osint_reports"
+    id: Mapped[str] = uuid_pk()
+    case_id: Mapped[str] = mapped_column(ForeignKey("cases.id", ondelete="CASCADE"), index=True)
+    target: Mapped[str] = mapped_column(Text)
+    target_type: Mapped[str] = mapped_column(String(30))
+    status: Mapped[str] = mapped_column(String(30))
+    report: Mapped[str] = mapped_column(Text, default="{}")
+    object_hash: Mapped[str] = mapped_column(String(64))
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
+class GeoObservation(Base):
+    """A source-reported location, never an inferred live position.
+
+    Precision and provenance are mandatory because a place-name mention, an
+    EXIF point and a visually confirmed landmark answer different questions.
+    """
+    __tablename__ = "geo_observations"
+    id: Mapped[str] = uuid_pk()
+    case_id: Mapped[str] = mapped_column(ForeignKey("cases.id", ondelete="CASCADE"), index=True)
+    post_id: Mapped[str | None] = mapped_column(ForeignKey("posts.id", ondelete="CASCADE"), nullable=True)
+    media_asset_id: Mapped[str | None] = mapped_column(
+        ForeignKey("media_assets.id", ondelete="CASCADE"), nullable=True)
+    location_name: Mapped[str] = mapped_column(String(300), default="")
+    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    precision: Mapped[str] = mapped_column(String(40), default="unknown")
+    source: Mapped[str] = mapped_column(String(60), default="authorized_import")
+    observed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class MediaForensics(Base):
+    """Versioned media-screening output, separate from a deepfake verdict."""
+    __tablename__ = "media_forensics"
+    id: Mapped[str] = uuid_pk()
+    case_id: Mapped[str] = mapped_column(ForeignKey("cases.id", ondelete="CASCADE"), index=True)
+    media_asset_id: Mapped[str] = mapped_column(ForeignKey("media_assets.id", ondelete="CASCADE"), index=True)
+    analysis_run_id: Mapped[str | None] = mapped_column(ForeignKey("analysis_runs.id"), nullable=True)
+    status: Mapped[str] = mapped_column(String(40), default="screened")
+    indicators: Mapped[str] = mapped_column(Text, default="{}")
+    model_result: Mapped[str] = mapped_column(Text, default="{}")
+    limitations: Mapped[str] = mapped_column(Text, default="[]")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
 
 
 # --------------------------------------------------------------------------- exports / audit

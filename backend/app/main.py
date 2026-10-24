@@ -18,7 +18,7 @@ from . import __version__
 from .config import get_settings
 from .database import SessionLocal, init_db
 from .models import User
-from .routers import agent, cases, comments, connectors, exports, graph, runs
+from .routers import agent, analytics, cases, comments, connectors, exports, graph, media, osint, runs
 from .services.jobs import reconcile_orphans
 
 settings = get_settings()
@@ -107,6 +107,9 @@ def create_app() -> FastAPI:
     app.include_router(graph.router)
     app.include_router(comments.router)
     app.include_router(connectors.router)
+    app.include_router(osint.router)
+    app.include_router(analytics.router)
+    app.include_router(media.router)
     app.include_router(exports.router)
     return app
 

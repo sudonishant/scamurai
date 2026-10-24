@@ -11,12 +11,26 @@ import os
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, DotEnvSettingsSource, SettingsConfigDict
 
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="SCAMURAI_", env_file=".env", extra="ignore")
+
+    @classmethod
+    def settings_customise_sources(
+        cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+    ):
+        # Keep existing PS03_ .env deployments working while SCAMURAI_ remains canonical.
+        # Source order gives native settings and SCAMURAI_ values higher precedence.
+        legacy_dotenv = DotEnvSettingsSource(
+            settings_cls,
+            env_file=dotenv_settings.env_file,
+            env_file_encoding=dotenv_settings.env_file_encoding,
+            env_prefix="PS03_",
+        )
+        return init_settings, env_settings, dotenv_settings, legacy_dotenv, file_secret_settings
 
     environment: str = "development"
     database_url: str = "sqlite:///./scamurai_dev.db"
@@ -26,7 +40,7 @@ class Settings(BaseSettings):
     s3_bucket: str = "scamurai-private"
     storage_dir: str = str(Path(__file__).resolve().parents[2] / "var" / "storage")
 
-    # Auth — dev tokens are demo-only and must be replaced by an IdP/OAuth in deployment.
+    # Auth — development tokens must be replaced by an IdP/OAuth in deployment.
     dev_auth_enabled: bool = True
     jwt_secret: str = "change-me-in-deployment"
 
@@ -54,15 +68,23 @@ class Settings(BaseSettings):
     llm_provider: str | None = None          # "groq" | "openrouter" | "gemini"
     llm_model_id: str | None = None
     jev_api_url: str | None = None
+    # Optional local Hugging Face image classifier. Empty means no synthetic-media
+    # score is produced; deterministic metadata/forensic indicators still run.
+    deepfake_model_id: str | None = None
+    deepfake_model_revision: str | None = None
+
+    # Bounded passive OSINT sources. No port scanning or credential discovery.
+    osint_timeout_seconds: float = 12.0
+    osint_max_hostnames: int = 150
 
     # --- Provider credentials (server-side only; never logged, prompted or exported) ---
     # OpenAI-compatible providers (Groq, OpenRouter): same chat-completions shape.
     llm_api_key: str | None = None
     llm_base_url: str | None = None          # e.g. https://api.groq.com/openai/v1
-    gemini_api_key: str | None = None        # aistudio.google.com free-tier key
+    gemini_api_key: str | None = None        # Google AI Studio / Gemini API credential
     youtube_api_key: str | None = None       # Google Cloud, YouTube Data API v3
     google_factcheck_api_key: str | None = None
-    reddit_client_id: str | None = None      # reddit.com/prefs/apps (approval-gated since 2025)
+    reddit_client_id: str | None = None      # Official approval/access still required
     reddit_client_secret: str | None = None
     reddit_user_agent: str | None = None
 
