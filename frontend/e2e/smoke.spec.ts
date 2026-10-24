@@ -24,6 +24,83 @@ async function waitForJob(request: any, jobId: string) {
   await expect.poll(async () => (await (await request.get(`/api/v1/cases/${caseId}/jobs/${jobId}`, { headers: AUTH })).json()).lifecycle).toBe("completed");
 }
 
+async function loginAndOpenCase(page: any) {
+  await page.goto("/");
+  await page.getByLabel("Bearer token").fill("dev-token-owner");
+  await page.getByRole("button", { name: "Open live workspace" }).click();
+  await expect(page.getByRole("heading", { name: "Choose an investigation" })).toBeVisible();
+  const caseRow = page.locator(".case-row").filter({ hasText: caseTitle });
+  await caseRow.getByRole("button", { name: /Open case/i }).click();
+  await expect(page.getByRole("heading", { name: "Situation awareness" })).toBeVisible();
+}
+
+async function installFetchStub(page: any, mode: "exports" | "comments" | "sources") {
+  await page.addInitScript((testMode) => {
+    const state: any = { testMode, exportReads: 0, exportRecords: [], submittedExport: null, commentQueries: [], initialCommentFailures: 2, sourceRequests: [] };
+    (window as any).__scamuraiE2E = state;
+    const nativeFetch = window.fetch.bind(window);
+    const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+    window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      const requestUrl = input instanceof Request ? input.url : String(input);
+      const url = new URL(requestUrl, window.location.href);
+      const method = (init?.method || (input instanceof Request ? input.method : "GET")).toUpperCase();
+      if (testMode === "exports" && url.pathname.endsWith("/exports")) {
+        if (method === "GET") {
+          state.exportReads += 1;
+          if (state.exportReads <= 2) {
+            await new Promise((resolve) => setTimeout(resolve, 350));
+            return json({ detail: "temporary exports outage" }, 503);
+          }
+          return json(state.exportRecords);
+        }
+        state.submittedExport = JSON.parse(String(init?.body || "{}"));
+        const created = { id: "pw-selected-export", fmt: "json", scope: "selected", redaction_mode: "redacted", status: "ready", sha256: "abcdef0123456789", expires_at: null, created_at: "2026-10-24T00:00:00Z", download_url: null };
+        state.exportRecords = [created, ...state.exportRecords];
+        return json(created, 202);
+      }
+      if (url.pathname.endsWith("/comments")) {
+        const query = url.searchParams.get("q") || "";
+        state.commentQueries.push(query);
+        if (testMode === "comments" && state.initialCommentFailures > 0) {
+          state.initialCommentFailures -= 1;
+          return json({ detail: "comments temporarily unavailable" }, 503);
+        }
+        if (testMode === "comments" && !query) await new Promise((resolve) => setTimeout(resolve, 350));
+        return json({ total: 2, coverage: [], items: [
+          { id: "comment-selected-1", stable_id: null, raw_text: "First selectable comment", author_ref: "alpha", timestamp: null, timestamp_precision: "unknown", parent_comment_id: null, permalink: null, permalink_status: "not_available", review_status: "unreviewed", uncertain_duplicate: false, analysis: null },
+          { id: "comment-selected-2", stable_id: null, raw_text: testMode === "comments" ? "alpha test comment" : "Second selectable comment", author_ref: "beta", timestamp: null, timestamp_precision: "unknown", parent_comment_id: null, permalink: null, permalink_status: "not_available", review_status: "unreviewed", uncertain_duplicate: false, analysis: null },
+        ] });
+      }
+      if (testMode === "sources" && url.pathname.endsWith("/connectors/mastodon/import")) {
+        state.sourceRequests.push(JSON.parse(String(init?.body || "{}")));
+        return json({ posts: 2, accounts: 1, geo_observations: 0, coverage: "One permitted public page imported.", statuses_returned: 2, skipped_reblogs: 0 });
+      }
+      const response = await nativeFetch(input, init);
+      return response;
+    };
+  }, mode);
+}
+
+async function installAlertFixture(page: any) {
+  await page.addInitScript(() => {
+    const nativeFetch = window.fetch.bind(window);
+    window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      const requestUrl = input instanceof Request ? input.url : String(input);
+      const response = await nativeFetch(input, init);
+      const url = new URL(requestUrl, window.location.href);
+      if (!url.pathname.endsWith("/analytics") || !response.ok) return response;
+      const data: any = await response.json();
+      data.alerts = [
+        { id: "alert-test-narrative", type: "narrative_acceleration", title: "Narrative destination test", severity: "high", attention_score: 80, narrative_id: "narrative-test", rule: "test rule", recommended_action: "Review narrative" },
+        { id: "alert-test-coordination", type: "coordination_review", title: "Coordination destination test", severity: "review", attention_score: 50, narrative_id: null, rule: "test rule", recommended_action: "Review network" },
+        { id: "alert-test-geo", type: "geospatial_spike", title: "Geospatial destination test", severity: "elevated", attention_score: 60, narrative_id: null, rule: "test rule", recommended_action: "Review geo" },
+        { id: "alert-test-gap", type: "data_coverage_gap", title: "Coverage destination test", severity: "data_gap", attention_score: null, narrative_id: null, rule: "test rule", recommended_action: "Review access" },
+      ];
+      return new Response(JSON.stringify(data), { status: response.status, headers: { "content-type": "application/json" } });
+    };
+  });
+}
+
 // QA-only corpus created through the real API. The product itself has no demo mode.
 test.beforeAll(async ({ request }) => {
   caseTitle = `Playwright validation ${Date.now()}`;
@@ -167,4 +244,112 @@ test("a live transport failure shows an error and never offers demo evidence", a
   expect(await page.evaluate(() => localStorage.getItem("scamurai.devToken"))).toBeNull();
   await expect(page.getByRole("heading", { name: "Choose an investigation" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /Explore synthetic demo/i })).toHaveCount(0);
+});
+
+
+test("collection controls accept manual evidence and expose authorized workflow actions", async ({ page }) => {
+  await loginAndOpenCase(page);
+  await page.getByRole("button", { name: /Collect & run/i }).click();
+  await expect(page.getByRole("heading", { name: "Add evidence & run workflows" })).toBeVisible();
+  await expect(page.getByText("Authorized file import")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Coordination features" })).toBeEnabled();
+  await page.getByPlaceholder("Paste source text…").fill("Playwright manual evidence control validation.");
+  await page.getByRole("button", { name: "Add text", exact: true }).click();
+  await expect(page.locator(".inline-alert.success")).toContainText("Manual text evidence added.");
+});
+
+test("active workspace tab is addressable and restored from the URL", async ({ page }) => {
+  await loginAndOpenCase(page);
+  await page.locator(".workspace-nav").getByRole("button", { name: "Narratives", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`[?&]case=${caseId}.*[?&]tab=narratives|[?&]tab=narratives.*[?&]case=${caseId}`));
+  await page.reload();
+  await expect(page.locator('.workspace-nav button[aria-current="page"]')).toHaveText("Narratives");
+  await page.goBack();
+  await expect(page.locator('.workspace-nav button[aria-current="page"]')).toHaveText("Overview");
+});
+
+test("evidence graph relationships open their drill-down drawer", async ({ page }) => {
+  await loginAndOpenCase(page);
+  await page.locator(".workspace-nav").getByRole("button", { name: "Evidence graph", exact: true }).click();
+  const inspect = page.getByRole("button", { name: "Inspect relationships" });
+  await expect(inspect).toBeEnabled();
+  await inspect.click();
+  const relationship = page.locator(".graph-relationship-option").first();
+  await expect(relationship).toBeVisible();
+  await relationship.click();
+  await expect(page.locator(".panel.right h3")).toHaveText("Relationship");
+  await expect(page.locator(".panel.right")).toContainText("How was this derived?");
+});
+
+test("selected-record exports select comments, report failures, and send selected IDs", async ({ page }) => {
+  await installFetchStub(page, "exports");
+  await loginAndOpenCase(page);
+  await page.locator(".workspace-nav").getByRole("button", { name: "Exports", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("Loading exports");
+  await expect(page.getByRole("alert")).toContainText("temporary exports outage");
+  await page.getByRole("button", { name: "Retry" }).click();
+  await expect(page.getByText("No exports have been generated for this case.")).toBeVisible();
+  await page.getByLabel("Scope").selectOption("selected");
+  const firstComment = page.locator(".export-selection-item").filter({ hasText: "First selectable comment" });
+  await expect(firstComment).toBeVisible();
+  const generate = page.getByRole("button", { name: "Generate", exact: true });
+  await expect(generate).toBeDisabled();
+  await firstComment.locator("input").check();
+  await expect(generate).toBeEnabled();
+  await generate.click();
+  await expect(page.locator("tbody tr").filter({ hasText: "selected" })).toBeVisible();
+  const submitted = await page.evaluate(() => (window as any).__scamuraiE2E.submittedExport);
+  expect(submitted).toMatchObject({ scope: "selected", selected_ids: ["comment-selected-1"] });
+});
+
+test("comments show retryable errors and debounce search until typing settles", async ({ page }) => {
+  await installFetchStub(page, "comments");
+  await loginAndOpenCase(page);
+  await page.locator(".workspace-nav").getByRole("button", { name: "Comments", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("comments temporarily unavailable");
+  await page.getByRole("button", { name: "Retry" }).click();
+  await expect(page.getByRole("status")).toContainText("Loading comments");
+  await expect(page.getByText("alpha test comment")).toBeVisible();
+  const filter = page.getByLabel("Filter comments");
+  await filter.fill("a");
+  await filter.fill("al");
+  await filter.fill("alpha");
+  await expect.poll(async () => (await page.evaluate(() => (window as any).__scamuraiE2E.commentQueries)).filter((query: string) => query === "alpha").length).toBe(1);
+  const requestedQueries: string[] = await page.evaluate(() => (window as any).__scamuraiE2E.commentQueries);
+  expect(requestedQueries.filter((query) => query === "a" || query === "al")).toEqual([]);
+});
+
+test("account comparison builds a pairwise result and source integration controls return visible status", async ({ page }) => {
+  await installFetchStub(page, "sources");
+  await loginAndOpenCase(page);
+  await page.locator(".workspace-nav").getByRole("button", { name: "Compare accounts", exact: true }).click();
+  const accounts = page.locator(".pill-row button");
+  await expect(accounts).toHaveCount(3);
+  await accounts.nth(0).click();
+  await accounts.nth(1).click();
+  await page.getByRole("button", { name: /Build pairwise matrix \(1 pairs\)/ }).click();
+  await expect(page.locator(".compare-pair")).toHaveCount(1);
+
+  await page.locator(".workspace-nav").getByRole("button", { name: "Connectors", exact: true }).click();
+  await page.locator('input[placeholder="disinformation"]').fill("browser-check");
+  await page.getByRole("button", { name: "Import public timeline" }).click();
+  await expect(page.locator(".result-callout")).toContainText("2 new posts · 1 accounts");
+  const sourceRequests = await page.evaluate(() => (window as any).__scamuraiE2E.sourceRequests);
+  expect(sourceRequests).toMatchObject([{ instance: "mastodon.social", hashtag: "browser-check" }]);
+});
+
+test("every overview alert family opens its matching investigation section", async ({ page }) => {
+  await installAlertFixture(page);
+  await loginAndOpenCase(page);
+  const destinations = [
+    ["Narrative destination test", "Narratives"],
+    ["Coordination destination test", "Network & behavior"],
+    ["Geospatial destination test", "Geospatial"],
+    ["Coverage destination test", "Connectors"],
+  ];
+  for (const [title, destination] of destinations) {
+    await page.locator(".alert-row").filter({ hasText: title }).click();
+    await expect(page.locator('.workspace-nav button[aria-current="page"]')).toContainText(destination);
+    await page.locator(".workspace-nav").getByRole("button", { name: "Overview", exact: true }).click();
+  }
 });

@@ -2,19 +2,56 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import type { CommentRow } from "../lib/types";
 
+function message(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export default function CommentsView({ caseId, onChanged }: { caseId: string; onChanged: () => void }) {
   const [items, setItems] = useState<CommentRow[]>([]);
   const [coverage, setCoverage] = useState<unknown[]>([]);
   const [total, setTotal] = useState(0);
+  const [query, setQuery] = useState("");
   const [q, setQ] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [retry, setRetry] = useState(0);
+  const [analyzingId, setAnalyzingId] = useState("");
+  const [actionError, setActionError] = useState("");
 
-  async function load() {
-    const body = await api.comments(caseId, q);
-    setItems(body.items);
-    setCoverage(body.coverage);
-    setTotal(body.total);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setQ(query.trim()), 300);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError("");
+    api.comments(caseId, q)
+      .then((body) => {
+        if (!active) return;
+        setItems(body.items);
+        setCoverage(body.coverage);
+        setTotal(body.total);
+      })
+      .catch((e: unknown) => { if (active) setError(message(e)); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [caseId, q, retry]);
+
+  async function analyze(commentId: string) {
+    setAnalyzingId(commentId);
+    setActionError("");
+    try {
+      await api.analyzeComment(caseId, commentId);
+      setRetry((value) => value + 1);
+      onChanged();
+    } catch (e) {
+      setActionError(message(e));
+    } finally {
+      setAnalyzingId("");
+    }
   }
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [caseId, q]);
 
   return (
     <div className="scroll" style={{ padding: 14, height: "100%", overflow: "auto" }}>
@@ -28,7 +65,11 @@ export default function CommentsView({ caseId, onChanged }: { caseId: string; on
           </div>
         </div>
       ))}
-      <input placeholder="Filter text…" value={q} onChange={(e) => setQ(e.target.value)} style={{ marginBottom: 10 }} />
+      <input aria-label="Filter comments" placeholder="Filter text…" value={query} onChange={(e) => setQuery(e.target.value)} style={{ marginBottom: 10 }} />
+      {loading && <p className="muted" role="status">Loading comments…</p>}
+      {error && <div className="inline-alert danger" role="alert"><span>{error}</span><button className="btn btn-small btn-secondary" onClick={() => setRetry((value) => value + 1)}>Retry</button></div>}
+      {actionError && <div className="inline-alert danger" role="alert">Could not analyze comment: {actionError}</div>}
+      {!loading && !error && items.length === 0 && <p className="muted">No comments match this filter.</p>}
       <table>
         <thead>
           <tr><th>Comment</th><th>Author</th><th>Time / precision</th><th>Link</th><th>Analysis</th><th></th></tr>
@@ -63,9 +104,9 @@ export default function CommentsView({ caseId, onChanged }: { caseId: string; on
                 ) : <span className="muted">not analyzed</span>}
               </td>
               <td>
-                <button className="btn secondary" onClick={async () => {
-                  await api.analyzeComment(caseId, c.id); onChanged(); load();
-                }}>Explain</button>
+                <button className="btn secondary" disabled={!!analyzingId} onClick={() => analyze(c.id)}>
+                  {analyzingId === c.id ? "Analyzing…" : "Explain"}
+                </button>
               </td>
             </tr>
           ))}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import StartScreen from "./components/StartScreen";
 import Workspace from "./components/Workspace";
 import Icon from "./components/Icon";
@@ -8,12 +8,32 @@ import { getApiUrl, setApiUrl } from "./lib/api";
 interface Props { onLogout: () => void }
 
 export default function App({ onLogout }: Props) {
-  const [openCase, setOpenCase] = useState<string | null>(null);
+  const [openCase, setOpenCase] = useState<string | null>(() => new URLSearchParams(window.location.search).get("case"));
   const [goal, setGoal] = useState("overview");
+  useEffect(() => {
+    const restoreCase = () => setOpenCase(new URLSearchParams(window.location.search).get("case"));
+    window.addEventListener("popstate", restoreCase);
+    return () => window.removeEventListener("popstate", restoreCase);
+  }, []);
+  const openWorkspace = (id: string, nextGoal: string) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("case", id);
+    url.searchParams.delete("tab");
+    window.history.pushState({}, "", url);
+    setGoal(nextGoal);
+    setOpenCase(id);
+  };
+  const goHome = () => {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("case");
+    url.searchParams.delete("tab");
+    window.history.pushState({}, "", url);
+    setOpenCase(null);
+  };
   if (!openCase) {
-    return <div className="app"><MatrixBackdrop /><TopBar onLogout={onLogout} /><StartScreen onOpen={(id, g) => { setGoal(g); setOpenCase(id); }} /></div>;
+    return <div className="app"><MatrixBackdrop /><TopBar onLogout={onLogout} /><StartScreen onOpen={openWorkspace} /></div>;
   }
-  return <div className="app"><MatrixBackdrop /><TopBar onLogout={onLogout} onHome={() => setOpenCase(null)} /><Workspace caseId={openCase} initialGoal={goal} /></div>;
+  return <div className="app"><MatrixBackdrop /><TopBar onLogout={onLogout} onHome={goHome} /><Workspace caseId={openCase} initialGoal={goal} /></div>;
 }
 
 function TopBar({ onLogout, onHome }: { onLogout: () => void; onHome?: () => void }) {

@@ -12,6 +12,13 @@ export default function OverviewView({ data, loading, error, onRefresh, onNaviga
   const coverage = data.coverage;
   const activeNarratives = data.narratives.filter((n) => n.account_count > 1);
   const highAlerts = data.alerts.filter((a) => ["high", "elevated"].includes(String(a.severity)));
+  const alertDestination = (alert: Record<string, any>): string => {
+    if (alert.narrative_id || alert.type === "narrative_acceleration") return "narratives";
+    if (alert.type === "coordination_review") return "network";
+    if (alert.type === "geospatial_spike") return "geo";
+    if (alert.type === "data_coverage_gap") return "connectors";
+    return "findings";
+  };
   return <div className="view-page">
     <PageHeader eyebrow="MISSION OVERVIEW" title="Situation awareness" description={data.scope} actions={<><button className="btn btn-secondary" onClick={onRefresh}><Icon name="refresh" /> Refresh analytics</button><button className="btn btn-primary" onClick={onCollect}><Icon name="upload" /> Collect data</button></>} />
     {error && <ErrorView message={error} retry={onRefresh} />}
@@ -26,7 +33,7 @@ export default function OverviewView({ data, loading, error, onRefresh, onNaviga
     <div className="overview-grid">
       <section className="card span-two">
         <div className="card-head"><div><span className="eyebrow">PRIORITY QUEUE</span><h2>Early warnings & review cues</h2></div><span className="small-muted">Rule-based · not accusations</span></div>
-        {data.alerts.length === 0 ? <div className="empty-inline"><Icon name="check" /><span>No threshold crossed in the current corpus. This does not establish absence of coordination.</span></div> : <div className="alert-list">{data.alerts.slice(0, 6).map((alert) => <button className="alert-row" key={String(alert.id)} onClick={() => alert.narrative_id ? onNavigate("narratives") : undefined}>
+        {data.alerts.length === 0 ? <div className="empty-inline"><Icon name="check" /><span>No threshold crossed in the current corpus. This does not establish absence of coordination.</span></div> : <div className="alert-list">{data.alerts.slice(0, 6).map((alert) => <button className="alert-row" key={String(alert.id)} onClick={() => onNavigate(alertDestination(alert))} aria-label={`Open ${String(alert.title)} in ${alertDestination(alert)}`}>
           <SeverityBadge value={String(alert.severity)} />
           <div className="alert-copy"><b>{String(alert.title)}</b><p>{String(alert.rule)}</p><small>{String(alert.recommended_action || "Review evidence")}</small></div>
           {alert.attention_score !== null && alert.attention_score !== undefined && <span className="attention-score"><b>{String(alert.attention_score)}</b><small>attention</small></span>}
