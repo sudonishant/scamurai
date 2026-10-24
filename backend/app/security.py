@@ -10,6 +10,7 @@ import html
 import ipaddress
 import socket
 from dataclasses import dataclass
+from pathlib import PurePosixPath
 from urllib.parse import urlparse
 
 from fastapi import Depends, Header, HTTPException, status
@@ -40,6 +41,8 @@ def get_current_user(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> User:
+    if not settings.dev_auth_enabled:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Development token authentication is disabled")
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Missing bearer token")
     token = authorization.removeprefix("Bearer ").strip()
@@ -47,6 +50,15 @@ def get_current_user(
     if user is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid token")
     return user
+
+
+def sanitize_upload_filename(filename: str | None) -> str:
+    """Reduce an untrusted client filename to a safe, bounded basename."""
+    normalized = (filename or "upload").replace("\\", "/")
+    name = PurePosixPath(normalized).name.replace("\x00", "").strip()
+    if name in {"", ".", ".."}:
+        name = "upload"
+    return name[:255]
 
 
 @dataclass

@@ -21,7 +21,7 @@ from ..models import (
 from ..registry import (
     ACCOUNT, COMMENT, EVIDENCE, MEDIA, POST,
 )
-from ..security import validate_image_signature
+from ..security import sanitize_upload_filename, validate_image_signature
 from . import graph, images, storage
 from .textutil import normalize_text
 
@@ -235,6 +235,7 @@ def import_comment_rows(db: Session, case_id: str, actor_id: str, rows: list[dic
 # --------------------------------------------------------------------------- media
 def register_media(db: Session, case_id: str, actor_id: str, data: bytes, filename: str,
                    declared_mime: str | None, input_id: str) -> MediaAsset:
+    filename = sanitize_upload_filename(filename)
     mime = validate_image_signature(data)  # signature, not extension
     info = images.inspect_image(data, mime)
     digest = storage.sha256_hex(data)

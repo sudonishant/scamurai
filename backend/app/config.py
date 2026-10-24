@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     storage_dir: str = str(Path(__file__).resolve().parents[2] / "var" / "storage")
 
     # Auth — development tokens must be replaced by an IdP/OAuth in deployment.
-    dev_auth_enabled: bool = True
+    dev_auth_enabled: bool = False
     jwt_secret: str = "change-me-in-deployment"
 
     # Prototype guardrails (section 4 of the master prompt); adjustable engineering defaults.

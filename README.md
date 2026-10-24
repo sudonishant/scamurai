@@ -86,6 +86,8 @@ npm run dev -- --host 0.0.0.0 --port 5173
 
 Open `http://localhost:5173`. FastAPI Swagger is at `http://localhost:8000/docs`.
 
+For the fixed local development roles below, run `cp .env.example backend/.env` from the repository root before starting the backend. The sample file explicitly enables `SCAMURAI_DEV_AUTH_ENABLED`; the application default is off, and the fixed development tokens must not be enabled on a public deployment.
+
 Convenience targets:
 
 ```bash

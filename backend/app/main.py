@@ -38,6 +38,8 @@ SEED_USERS = [
 
 
 def seed_users() -> None:
+    if not settings.dev_auth_enabled:
+        return
     with SessionLocal() as db:
         for email, name, token in SEED_USERS:
             if not db.scalar(select(User).where(User.email == email)):

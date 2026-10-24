@@ -15,6 +15,7 @@ import json
 import re
 from datetime import timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -55,7 +56,7 @@ def _bucket(finding: Finding) -> str:
 
 
 def _gather(db: Session, case, export: Export) -> dict:
-    comments = db.scalars(select(Comment).where(Comment.case_id == case.id)).all()
+    source_comments = db.scalars(select(Comment).where(Comment.case_id == case.id)).all()
     analyses = {a.comment_id: a for a in db.scalars(
         select(CommentAnalysis).where(CommentAnalysis.case_id == case.id)).all()}
     findings = db.scalars(select(Finding).where(Finding.case_id == case.id)).all()
@@ -66,17 +67,24 @@ def _gather(db: Session, case, export: Export) -> dict:
         CoordinationCandidate.case_id == case.id)).all()
 
     if export.scope == "flagged":
-        comments = [c for c in comments if (analyses.get(c.id) and
+        source_comments = [c for c in source_comments if (analyses.get(c.id) and
                     any("insult" in x or "threat" in x or "hate" in x or "harassment" in x
                         for x in json.loads(analyses[c.id].categories)))]
     elif export.scope == "selected" and export.manifest:
         selected = set(json.loads(export.manifest).get("selected_ids", []))
-        comments = [c for c in comments if c.id in selected]
+        source_comments = [c for c in source_comments if c.id in selected]
 
-    if export.redaction_mode == "redacted":
-        for comment in comments:
-            comment.raw_text = _redact(comment.raw_text)
-            comment.author_ref = mask_identifier(comment.author_ref)
+    redacted = export.redaction_mode == "redacted"
+    comments = [SimpleNamespace(
+        id=comment.id,
+        raw_text=_redact(comment.raw_text) if redacted else comment.raw_text,
+        author_ref=mask_identifier(comment.author_ref) if redacted else comment.author_ref,
+        timestamp=comment.timestamp,
+        timestamp_precision=comment.timestamp_precision,
+        permalink=comment.permalink,
+        permalink_status=comment.permalink_status,
+        review_status=comment.review_status,
+    ) for comment in source_comments]
 
     buckets: dict[str, list[Finding]] = {"established": [], "signals_and_hypotheses": [],
                                          "unknowns": [], "conflicting_evidence": [],

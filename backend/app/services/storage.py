@@ -20,8 +20,16 @@ def _root() -> Path:
     return root
 
 
+def _safe_path(*parts: str) -> Path:
+    root = _root().resolve()
+    path = root.joinpath(*parts).resolve()
+    if not path.is_relative_to(root):
+        raise ValueError("Object key escapes storage root")
+    return path
+
+
 def put_object(case_id: str, key: str, data: bytes) -> str:
-    path = _root() / case_id / key
+    path = _safe_path(case_id, key)
     path.parent.mkdir(parents=True, exist_ok=True)
     # Write-temp-then-renove: crash-safe, no partial snapshots.
     tmp = path.with_suffix(path.suffix + ".tmp")
@@ -31,11 +39,11 @@ def put_object(case_id: str, key: str, data: bytes) -> str:
 
 
 def get_object(object_key: str) -> bytes:
-    return (_root() / object_key).read_bytes()
+    return _safe_path(object_key).read_bytes()
 
 
 def object_path(object_key: str) -> Path:
-    return _root() / object_key
+    return _safe_path(object_key)
 
 
 def sha256_hex(data: bytes) -> str:

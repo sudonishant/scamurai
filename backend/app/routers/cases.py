@@ -13,8 +13,10 @@ from ..models import (
     AuditEvent, Case, CaseMembership, EvidenceRecord, Input, Post, SourceAccess, User,
 )
 from ..registry import POST
-from ..schemas import CapabilityOut, CaseCreate, CaseOut, InputOut, TextInputCreate, UrlInputCreate
-from ..security import get_current_user, require_case, validate_image_signature
+from ..schemas import CapabilityOut, CaseCreate, CaseOut, InputOut, TextInputCreate, UrlInputCreate, UserOut
+from ..security import (
+    get_current_user, require_case, sanitize_upload_filename, validate_image_signature,
+)
 from ..services import connectors, graph, importer, storage
 from ..services.audit import record
 from ..services.textutil import normalize_text
@@ -33,9 +35,9 @@ def _serialize_case(case: Case, role: str) -> CaseOut:
     )
 
 
-@router.get("/users", response_model=list[dict])
+@router.get("/users", response_model=list[UserOut])
 def list_users(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
-    return [{"id": u.id, "email": u.email, "name": u.name, "token_hint": u.dev_token}
+    return [{"id": u.id, "email": u.email, "name": u.name}
             for u in db.scalars(select(User)).all()]
 
 
@@ -156,17 +158,18 @@ async def upload(
     raw = await file.read()
     if len(raw) > settings.max_upload_bytes:
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Upload exceeds case limit")
-    inp = Input(case_id=ctx.case.id, kind=kind, filename=file.filename,
+    filename = sanitize_upload_filename(file.filename)
+    inp = Input(case_id=ctx.case.id, kind=kind, filename=filename,
                 content_type=file.content_type, byte_length=len(raw),
                 payload=json.dumps({"meta": meta}), created_by=ctx.user.id,
-                idempotency_key=f"upload:{storage.sha256_hex(raw)}:{file.filename}")
+                idempotency_key=f"upload:{storage.sha256_hex(raw)}:{filename}")
     db.add(inp)
     db.flush()
     try:
         if kind == "image":
             mime = validate_image_signature(raw)
             asset = importer.register_media(db, ctx.case.id, ctx.user.id, raw,
-                                            file.filename, mime, inp.id)
+                                            filename, mime, inp.id)
             inp.status = f"media_registered:{asset.id[:8]}"
         elif kind == "json":
             payload = importer.parse_json(raw)
@@ -203,7 +206,7 @@ async def upload(
     except (ValueError, json.JSONDecodeError) as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc))
     record(db, ctx.user.id, "input.upload", "input", inp.id, ctx.case.id,
-           {"filename": file.filename, "bytes": len(raw)})
+           {"filename": filename, "bytes": len(raw)})
     db.commit()
     return _serialize_input(db, inp)
 

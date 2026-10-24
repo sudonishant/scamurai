@@ -127,7 +127,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
-  users: () => request<{ id: string; email: string; name: string; token_hint: string }[]>("/api/v1/users"),
+  users: () => request<{ id: string; email: string; name: string; role_hint: string }[]>("/api/v1/users"),
   createCase: (body: unknown) => request<Case>("/api/v1/cases", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
   listCases: () => request<Case[]>("/api/v1/cases"),
   getCase: (id: string) => request<Case>(`/api/v1/cases/${id}`),
