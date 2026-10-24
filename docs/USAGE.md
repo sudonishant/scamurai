@@ -44,7 +44,7 @@ Development ke 4 role-based tokens (ye demo mode nahi, local development authent
 | Reviewer | `dev-token-reviewer` | findings accept/reject/need-more |
 | Viewer | `dev-token-viewer` | sirf dekhna (read-only) |
 
-Token paste karte waqt `dev-token-owner` ya poora `Bearer dev-token-owner` dono chalenge; client prefix normalize karta hai. **Open live workspace** real cases API se token validate karta hai. Invalid token, 401 ya network failure par visible error milta hai—koi demo/offline evidence fallback nahi.
+Token paste karte waqt `dev-token-owner` ya poora `Bearer dev-token-owner` dono chalenge; client prefix normalize karta hai. **Open live workspace** real cases API se token validate karta hai. Invalid token, 401 ya network failure par visible error milta hai—koi demo/offline evidence fallback nahi. GitHub Pages jaise static host par pehle **Live API connection** me separately deployed HTTPS FastAPI URL save karo; backend CORS me UI ka exact origin allow hona chahiye. 401 ke baad configured API URL preserve hota hai.
 
 > Production me ye screen real identity provider (OAuth/SSO) se replace hogi.
 
@@ -178,7 +178,7 @@ make eval       # fixture-based evaluation harness (label recall, match categori
 cd frontend
 npm run build
 npx playwright install chromium
-npm run test:e2e  # API :8000 + Vite :5173 pehle start karo; 4 browser checks
+npm run test:e2e  # API :8000 + Vite :5173 pehle start karo; 5 browser checks
 ```
 
 ## 10. Yaad rakhne wali limitations (honest by design)

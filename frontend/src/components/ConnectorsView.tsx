@@ -60,7 +60,7 @@ export default function ConnectorsView({ caseId, role, onChanged }: { caseId: st
 
     <section className="card connector-card"><div className="connector-heading"><span className="icon-tile"><Icon name="media" /></span><div><h2>YouTube public comments</h2><p>Official Data API v3 · key and quota required · replies and coverage state preserved</p></div>{cap("youtube") && <span className={`source-status ${cap("youtube")!.configured ? "good" : "limited"}`}><span />{cap("youtube")!.status.replaceAll("_", " ")}</span>}</div>
       <div className="inline-form"><input value={ytUrl} onChange={(e) => setYtUrl(e.target.value)} placeholder="https://www.youtube.com/watch?v=… or 11-character video ID" disabled={!canRun || !!busy} /><button className="btn btn-secondary" disabled={!canRun || !!busy || ytUrl.trim().length < 11} onClick={() => guard("youtube", async () => { setYtResult(null); setYtResult(await api.youtubeImport(caseId, ytUrl)); onChanged(); })}>{busy === "youtube" ? "Importing…" : "Import comments"}</button></div>
-      {!cap("youtube")?.configured && <p className="limitation">Set <code>SCAMURAI_YOUTUBE_API_KEY</code> (legacy <code>PS03_YOUTUBE_API_KEY</code> also works) on the backend.</p>}
+      {!cap("youtube")?.configured && <p className="limitation">Set <code>SCAMURAI_YOUTUBE_API_KEY</code> on the backend.</p>}
       {ytResult && <div className="result-callout"><Icon name="check" /><div><b>{ytResult.comments_created} new comments imported</b><p>Coverage: {ytResult.coverage?.status} · {ytResult.uncertain_duplicates_held} uncertain duplicates held</p></div></div>}
     </section>
 

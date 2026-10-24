@@ -7,13 +7,12 @@ import type {
 const TOKEN_KEY = "scamurai.devToken";
 const API_URL_KEY = "scamurai.apiUrl";
 const MODE_KEY = "scamurai.mode"; // legacy key is recognized only to clear old sessions
-const LEGACY_TOKEN_KEY = "ps03.devToken";
 export const UNAUTHORIZED_EVENT = "scamurai:unauthorized";
 
 export function getToken(): string | null {
-  const token = localStorage.getItem(TOKEN_KEY) || localStorage.getItem(LEGACY_TOKEN_KEY);
+  const token = localStorage.getItem(TOKEN_KEY);
   if (token === "synthetic-demo" || localStorage.getItem(MODE_KEY) === "demo") {
-    [TOKEN_KEY, LEGACY_TOKEN_KEY, MODE_KEY].forEach((key) => localStorage.removeItem(key));
+    [TOKEN_KEY, MODE_KEY].forEach((key) => localStorage.removeItem(key));
     return null;
   }
   localStorage.removeItem(MODE_KEY);
@@ -27,18 +26,41 @@ export function setToken(token: string) {
   localStorage.removeItem(MODE_KEY);
 }
 
+function clearAuthentication() {
+  [TOKEN_KEY, MODE_KEY].forEach((key) => localStorage.removeItem(key));
+}
+
 export function clearSession() {
-  [TOKEN_KEY, LEGACY_TOKEN_KEY, API_URL_KEY, MODE_KEY].forEach((key) => localStorage.removeItem(key));
+  clearAuthentication();
 }
 
 export function getApiUrl(): string {
-  return localStorage.getItem(API_URL_KEY) || (import.meta as any).env?.VITE_API_BASE_URL || "";
+  const stored = localStorage.getItem(API_URL_KEY);
+  if (stored !== null) return stored; // an explicit empty value means same-origin
+  return (import.meta as any).env?.VITE_API_BASE_URL || "";
 }
 
-export function setApiUrl(url: string) {
-  const clean = url.trim().replace(/\/+$/, "");
-  if (clean) localStorage.setItem(API_URL_KEY, clean);
-  else localStorage.removeItem(API_URL_KEY);
+export function setApiUrl(url: string): string {
+  const value = url.trim();
+  if (!value) {
+    localStorage.setItem(API_URL_KEY, "");
+    return "";
+  }
+  let parsed: URL;
+  try { parsed = new URL(value); }
+  catch { throw new Error("Enter a complete FastAPI base URL, for example https://api.example.org."); }
+  if (!["http:", "https:"].includes(parsed.protocol)) {
+    throw new Error("The FastAPI base URL must use HTTP or HTTPS.");
+  }
+  if (parsed.username || parsed.password || parsed.search || parsed.hash) {
+    throw new Error("Use a base URL without credentials, query parameters or fragments.");
+  }
+  if (window.location.protocol === "https:" && parsed.protocol !== "https:") {
+    throw new Error("An HTTPS-hosted UI requires an HTTPS FastAPI URL to avoid mixed-content blocking.");
+  }
+  const clean = parsed.toString().replace(/\/+$/, "");
+  localStorage.setItem(API_URL_KEY, clean);
+  return clean;
 }
 
 export class ApiError extends Error {
@@ -81,7 +103,8 @@ async function liveFetch(path: string, init: RequestInit = {}, timeoutMs = 90_00
   try {
     const res = await fetch(fullUrl(path), { ...init, headers, signal: init.signal || controller.signal });
     if (res.status === 401) {
-      clearSession();
+      // Authentication expired; keep the explicitly configured backend connection.
+      clearAuthentication();
       window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
     }
     if (!res.ok) await parseError(res);

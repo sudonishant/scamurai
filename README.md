@@ -117,12 +117,26 @@ Paste either the token itself or the full `Bearer dev-token-owner` value; the cl
 - **Open live workspace** validates the token by calling the real cases API. Failures stay on screen.
 - There is no demo button, demo route, synthetic fallback, or fabricated “offline result.”
 - Logout clears only Scamurai’s session keys, not unrelated browser storage.
-- The default API address is same-origin; Vite proxies `/api` to FastAPI. A remote API can be configured from the top bar when CORS permits it.
-- A 401 ends the stale workspace session and returns to sign-in with an explicit message.
+- The default API address is same-origin; Vite proxies `/api` to FastAPI. A remote API can be configured before login or from the top bar when CORS permits it.
+- A 401 ends the stale workspace session and returns to sign-in with an explicit message while preserving the configured backend URL.
+
+### GitHub Pages frontend + separately deployed API
+
+GitHub Pages can host the static UI, but it cannot run FastAPI or OSINT workers. The included workflow never substitutes demo data when no backend is configured.
+
+1. Deploy FastAPI separately with durable storage/workers appropriate for the environment.
+2. In the repository's GitHub Actions variables, optionally set the **non-secret** `SCAMURAI_PUBLIC_API_URL` to the public FastAPI base URL. The workflow exposes it as `VITE_API_BASE_URL` at build time. Users can instead enter it under **Live API connection** on the sign-in screen.
+3. Add the exact UI origin—not the `/scamurai/` path—to backend CORS, for example:
+   ```dotenv
+   SCAMURAI_CORS_ORIGINS=https://neeshant.is-a.dev,http://localhost:5173,http://127.0.0.1:5173
+   ```
+4. Keep provider credentials and bearer/PAT tokens out of Actions variables, frontend code, static artifacts, Git history, and remote URLs. Any `VITE_*` value is public in the built JavaScript.
+
+A public backend also needs production authentication, TLS, CORS restrictions, and the deployment controls in [`docs/SECURITY.md`](docs/SECURITY.md). Development tokens are not a safe public authentication solution.
 
 ## Optional configuration
 
-Settings use the canonical `SCAMURAI_` prefix. Existing `PS03_` environment variables and `.env` files remain supported; when both forms are present, `SCAMURAI_` wins. See `.env.example` and [`docs/REQUIRED_CREDENTIALS.md`](docs/REQUIRED_CREDENTIALS.md).
+Settings use the `SCAMURAI_` prefix. See `.env.example` and [`docs/REQUIRED_CREDENTIALS.md`](docs/REQUIRED_CREDENTIALS.md).
 
 ```dotenv
 SCAMURAI_DEEPFAKE_MODEL_ID=
@@ -187,7 +201,7 @@ make fixtures
 make eval
 ```
 
-The Playwright suite creates its own clearly labelled validation case through the real API, so it needs neither a pre-seeded database nor an external provider. It covers real findings review, bearer-token normalization, API/access requirements, mobile overflow, and the rule that a live transport failure must not substitute demo evidence.
+The Playwright suite creates its own clearly labelled validation case through the real API, so it needs neither a pre-seeded database nor an external provider. Its five checks cover real findings review, bearer-token normalization, API/access requirements, mobile overflow, hosted remote-API configuration and 401 handling, and the rule that a live transport failure must not substitute demo evidence.
 
 The latest point-in-time results and external-source connectivity checks are recorded in [`docs/VALIDATION.md`](docs/VALIDATION.md). Connectivity is not an accuracy benchmark.
 
@@ -208,7 +222,7 @@ backend/app/
   routers/       cases, runs, graph, comments, connectors, osint, analytics, media, exports, agent
   services/      evidence pipelines, analytics, OSINT, media screening, providers, jobs, exports
   models.py      case-scoped evidence, source access, graph, reports and forensic records
-  config.py      SCAMURAI_ settings with PS03_ compatibility
+  config.py      SCAMURAI_-prefixed runtime settings
 backend/tests/   acceptance, security, provider, intelligence and configuration tests
 frontend/src/
   components/    mission dashboards, source workbench, graph/evidence and review views

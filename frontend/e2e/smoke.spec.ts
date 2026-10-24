@@ -119,12 +119,52 @@ test("mobile live workspace has no page-level horizontal overflow", async ({ pag
   await expect(page.locator(".geo-map svg")).toBeVisible();
 });
 
+test("hosted live API can be configured before login and survives an unauthorized response", async ({ page }) => {
+  let authorized = false;
+  const corsHeaders = {
+    "access-control-allow-origin": "*",
+    "access-control-allow-headers": "authorization,content-type",
+    "access-control-allow-methods": "GET,OPTIONS",
+  };
+  await page.route("https://api.example.test/api/v1/cases", async (route) => {
+    if (route.request().method() === "OPTIONS") {
+      await route.fulfill({ status: 204, headers: corsHeaders });
+      return;
+    }
+    expect(route.request().headers().authorization).toBe("Bearer dev-token-owner");
+    await route.fulfill({
+      status: authorized ? 200 : 401,
+      headers: { ...corsHeaders, "content-type": "application/json" },
+      body: JSON.stringify(authorized ? [] : { detail: "Invalid development token" }),
+    });
+  });
+  await page.goto("/");
+  await page.locator(".login-api-config summary").click();
+  await page.getByLabel("FastAPI base URL").fill("ftp://invalid.example");
+  await page.getByRole("button", { name: "Save connection" }).click();
+  await expect(page.getByRole("alert")).toContainText("must use HTTP or HTTPS");
+
+  await page.getByLabel("FastAPI base URL").fill("https://api.example.test/");
+  await page.getByRole("button", { name: "Save connection" }).click();
+  await expect(page.locator(".inline-alert.success")).toContainText("https://api.example.test");
+  await page.getByLabel("Bearer token").fill("dev-token-owner");
+  await page.getByRole("button", { name: "Open live workspace" }).click();
+  await expect(page.getByRole("alert")).toContainText("Invalid development token");
+  expect(await page.evaluate(() => localStorage.getItem("scamurai.apiUrl"))).toBe("https://api.example.test");
+
+  authorized = true;
+  await page.getByRole("button", { name: "Open live workspace" }).click();
+  await expect(page.getByRole("heading", { name: "Choose an investigation" })).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem("scamurai.apiUrl"))).toBe("https://api.example.test");
+});
+
 test("a live transport failure shows an error and never offers demo evidence", async ({ page }) => {
   await page.route("**/api/v1/cases", (route) => route.abort("failed"));
   await page.goto("/");
   await page.getByLabel("Bearer token").fill("dev-token-owner");
   await page.getByRole("button", { name: "Open live workspace" }).click();
   await expect(page.locator(".inline-alert.danger")).toContainText("Live backend is unreachable");
+  expect(await page.evaluate(() => localStorage.getItem("scamurai.devToken"))).toBeNull();
   await expect(page.getByRole("heading", { name: "Choose an investigation" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /Explore synthetic demo/i })).toHaveCount(0);
 });

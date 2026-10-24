@@ -36,9 +36,16 @@ jobs:
 
       - name: Build frontend
         run: cd frontend && npm run build
+        env:
+          # Optional non-secret FastAPI origin/path. Leave unset for same-origin/local use.
+          # Never put provider keys, bearer tokens or PATs in Pages build variables.
+          VITE_API_BASE_URL: ${{ vars.SCAMURAI_PUBLIC_API_URL }}
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
+
+      - name: Add Pages marker
+        run: touch frontend/dist/.nojekyll
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
