@@ -7,10 +7,10 @@ This is the file-level index for the roadmap implementation. The repository sour
 | File | Exact change |
 |---|---|
 | `.env.example` | Documents local/S3 storage, OIDC/JWKS, dev-auth enforcement and aggregate-geo threshold settings without secrets. |
-| `docker-compose.yml` | Adds runnable PostgreSQL, Redis, MinIO, migration, API, Celery worker and frontend topology with health dependencies and service-specific migration/API/worker healthchecks. |
+| `docker-compose.yml` | Adds runnable PostgreSQL, Redis, MinIO, migration, API, Celery worker and frontend topology with health dependencies and service-specific migration/API/worker healthchecks; uses digest-pinned public Chainguard MinIO server/client builds after upstream image withdrawal. |
 | `backend/Dockerfile` | Uses runtime requirements, non-root execution and the production API entrypoint. |
 | `frontend/Dockerfile` | Uses strict locked installation before the static build. |
-| `backend/requirements.txt` | Adds/pins Alembic, PostgreSQL, Redis/Celery, Boto3, JWT and cryptography runtime dependencies. |
+| `backend/requirements.txt` | Declares Alembic, PostgreSQL, Redis/Celery, Boto3, JWT/cryptography and the SciPy runtime required by NetworkX PageRank; no reliance on incidental local packages. |
 | `backend/requirements-dev.txt` | Separates pytest, Bandit and pip-audit development/security tooling. |
 | `Makefile` | Adds migration/security targets, locked frontend install and both evaluation harnesses. |
 | `.github/workflows/deploy.yml` | Gates Pages on backend tests, migration reversibility, multilingual/notebook checks, Bandit, pip-audit, npm audit/build, Chromium E2E/accessibility and real Compose smoke. |

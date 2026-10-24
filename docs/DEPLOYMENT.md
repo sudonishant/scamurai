@@ -32,6 +32,8 @@ npm run dev -- --host 0.0.0.0 --port 5173
 
 The Compose file contains PostgreSQL, Redis, MinIO, an Alembic migration job, FastAPI, a Celery worker and the static UI. The API and worker use non-root images. The default local credentials are development-only and are not production secrets.
 
+The original `minio/minio` and `minio/mc` Docker Hub images are no longer publicly pullable. Compose therefore uses anonymously pullable, multi-architecture Chainguard MinIO server/client builds pinned by digest (verified on 2026-10-24). The client uses its shell-capable `-dev` variant only for bucket bootstrap. The development server explicitly runs as root to preserve compatibility with named volumes created by the former root-based image; production deployments should instead use approved non-root volume initialization and their own reviewed registry/digests.
+
 ```bash
 cp .env.example .env
 docker compose up --build -d

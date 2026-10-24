@@ -16,6 +16,7 @@ psycopg[binary]>=3.1
 celery[redis]>=5.4
 boto3>=1.34
 networkx>=3.2
+scipy>=1.14  # Required by networkx.pagerank; do not rely on transitive/local installs.
 
 # Optional local OCR/model dependencies are intentionally not installed by default:
 # pytesseract requires a tesseract binary; transformers/torch are needed only when
