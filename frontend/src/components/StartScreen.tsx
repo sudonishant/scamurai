@@ -90,7 +90,7 @@ export default function StartScreen({ onOpen }: { onOpen: (id: string, goal: str
 
       {showCreate && <div className="modal-backdrop" onClick={(e) => e.target === e.currentTarget && setShowCreate(false)}>
         <div className="modal">
-          <div className="modal-head"><div><span className="eyebrow">NEW CASE</span><h2>Define investigation scope</h2></div><button className="icon-button" onClick={() => setShowCreate(false)}><Icon name="close" /></button></div>
+          <div className="modal-head"><div><span className="eyebrow">NEW CASE</span><h2>Define investigation scope</h2></div><button className="icon-button" aria-label="Close new case" onClick={() => setShowCreate(false)}><Icon name="close" /></button></div>
           <p className="muted">Scope controls collection and interpretation. Defaults: 5 seed URLs, depth 2, 200 entities and 20 source fetches, clamped server-side.</p>
           <div className="field"><label>Case title</label><input autoFocus value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="e.g. Regional flood narrative — October" /></div>
           <div className="field"><label>Purpose and authorized scope</label><textarea rows={4} value={form.purpose} onChange={(e) => setForm({ ...form, purpose: e.target.value })} placeholder="Which public sources, hashtags, URLs or authorized exports are in scope?" /></div>

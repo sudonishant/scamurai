@@ -11,6 +11,7 @@ import os
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -21,13 +22,24 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./scamurai_dev.db"
     # When set, the worker switches from in-process runner to Celery broker config.
     redis_url: str | None = None
+    storage_backend: str = "local"  # local | s3
     s3_endpoint: str | None = None
     s3_bucket: str = "scamurai-private"
+    s3_region: str = "us-east-1"
+    s3_access_key: str | None = None
+    s3_secret_key: str | None = None
+    s3_force_path_style: bool = True
     storage_dir: str = str(Path(__file__).resolve().parents[2] / "var" / "storage")
 
-    # Auth — development tokens must be replaced by an IdP/OAuth in deployment.
+    # Local development tokens are convenient only outside production. When
+    # disabled, a fully configured OIDC issuer/JWKS/audience is mandatory.
     dev_auth_enabled: bool = True
-    jwt_secret: str = "change-me-in-deployment"
+    oidc_issuer: str | None = None
+    oidc_audience: str | None = None
+    oidc_jwks_url: str | None = None
+    oidc_algorithms: str = "RS256"
+    oidc_leeway_seconds: int = 60
+    oidc_timeout_seconds: int = 10
 
     # Prototype guardrails (section 4 of the master prompt); adjustable engineering defaults.
     max_seed_urls: int = 5
@@ -72,13 +84,35 @@ class Settings(BaseSettings):
     reddit_client_id: str | None = None      # Official approval/access still required
     reddit_client_secret: str | None = None
     reddit_user_agent: str | None = None
+    geo_min_group_size: int = 3
 
     export_link_ttl_seconds: int = 3600
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
+    @model_validator(mode="after")
+    def validate_authentication(self):
+        production = self.environment.strip().lower() in {"production", "prod"}
+        if production and self.dev_auth_enabled:
+            raise ValueError("Development tokens cannot be enabled in production")
+        if not self.dev_auth_enabled and not all(
+                (self.oidc_issuer, self.oidc_audience, self.oidc_jwks_url)):
+            raise ValueError(
+                "OIDC_ISSUER, OIDC_AUDIENCE and OIDC_JWKS_URL are required when dev auth is disabled")
+        if self.geo_min_group_size < 1:
+            raise ValueError("GEO_MIN_GROUP_SIZE must be at least 1")
+        if self.storage_backend not in {"local", "s3"}:
+            raise ValueError("STORAGE_BACKEND must be 'local' or 's3'")
+        if self.storage_backend == "s3" and not self.s3_bucket.strip():
+            raise ValueError("S3_BUCKET is required for S3 storage")
+        return self
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def oidc_algorithm_list(self) -> list[str]:
+        return [item.strip() for item in self.oidc_algorithms.split(",") if item.strip()]
 
 
 @lru_cache

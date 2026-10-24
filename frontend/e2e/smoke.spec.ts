@@ -1,4 +1,6 @@
 import { test, expect } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
+import { writeFile } from "node:fs/promises";
 
 const AUTH = { Authorization: "Bearer dev-token-owner" };
 let caseId = "";
@@ -115,8 +117,64 @@ test("mobile live workspace has no page-level horizontal overflow", async ({ pag
   await expect(page.getByRole("heading", { name: "Situation awareness" })).toBeVisible();
   const dimensions = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, viewport: window.innerWidth }));
   expect(dimensions.scroll).toBeLessThanOrEqual(dimensions.viewport + 1);
+  await page.locator(".workspace-nav").getByRole("button", { name: "Accounts", exact: true }).click();
+  await expect(page.locator(".account-evidence")).toBeVisible();
+  const accountDimensions = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, viewport: window.innerWidth }));
+  expect(accountDimensions.scroll).toBeLessThanOrEqual(accountDimensions.viewport + 1);
   await page.locator(".workspace-nav").getByRole("button", { name: "Geospatial", exact: true }).click();
   await expect(page.locator(".geo-map svg")).toBeVisible();
+});
+
+test("global search opens account and post evidence with reload-safe deep links", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: /Case owner/i }).click();
+  const caseRow = page.locator(".case-row").filter({ hasText: caseTitle });
+  await caseRow.getByRole("button", { name: /Open case/i }).click();
+
+  await page.getByLabel("Search this investigation").fill("alpha");
+  const accountResult = page.locator(".global-search-results button").filter({ hasText: "@alpha" }).first();
+  await expect(accountResult).toBeVisible();
+  await accountResult.click();
+  await expect(page.getByRole("heading", { name: "@alpha", exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/tab=accounts/);
+  await expect(page).toHaveURL(/account=/);
+  await expect(page.locator(".account-evidence")).toContainText("First seen by Scamurai");
+
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "@alpha", exact: true })).toBeVisible();
+  await page.getByLabel("Search this investigation").fill("Bridge");
+  const postResult = page.locator(".global-search-results button").filter({ hasText: "playwright-0" }).first();
+  await expect(postResult).toBeVisible();
+  await postResult.click();
+  await expect(page).toHaveURL(/tab=narratives/);
+  await expect(page).toHaveURL(/post=/);
+  await expect(page.locator(".source-post-list article.focused-evidence")).toBeVisible();
+});
+
+test("alert review persists through direct deep-link reload", async ({ page, request }) => {
+  const analytics = await request.get(`/api/v1/cases/${caseId}/analytics`, { headers: AUTH });
+  expect(analytics.ok()).toBeTruthy();
+  await page.goto("/");
+  await page.getByRole("button", { name: /Case owner/i }).click();
+  const caseRow = page.locator(".case-row").filter({ hasText: caseTitle });
+  await caseRow.getByRole("button", { name: /Open case/i }).click();
+  await page.locator(".workspace-nav").getByRole("button", { name: "Alerts", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Alerts & analyst decisions" })).toBeVisible();
+  await page.locator(".review-queue-item").filter({ hasText: "Narrative acceleration" }).first().click();
+  const alertId = await page.locator(".review-detail").getAttribute("data-alert-id");
+  expect(alertId).toBeTruthy();
+  await page.getByLabel("Review state").selectOption("acknowledged");
+  await page.getByLabel(/Analyst note/).fill("Browser source coverage review");
+  await page.getByRole("button", { name: "Save audited review" }).click();
+  await expect.poll(async () => {
+    const rows = await (await request.get(`/api/v1/cases/${caseId}/alerts`, { headers: AUTH })).json();
+    return rows.find((row: any) => row.id === alertId)?.status;
+  }).toBe("acknowledged");
+
+  await page.goto(`/?case=${caseId}&tab=alerts&alert=${alertId}`);
+  await expect(page.locator(".review-detail")).toHaveAttribute("data-alert-id", alertId!);
+  await expect(page.getByLabel("Review state")).toHaveValue("acknowledged");
+  await expect(page.getByLabel(/Analyst note/)).toHaveValue("Browser source coverage review");
 });
 
 test("hosted live API can be configured before login and survives an unauthorized response", async ({ page }) => {
@@ -167,4 +225,53 @@ test("a live transport failure shows an error and never offers demo evidence", a
   expect(await page.evaluate(() => localStorage.getItem("scamurai.devToken"))).toBeNull();
   await expect(page.getByRole("heading", { name: "Choose an investigation" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /Explore synthetic demo/i })).toHaveCount(0);
+});
+
+test("core investigation screens have no detectable axe accessibility violations", async ({ page }) => {
+  const violations: string[] = [];
+  const audit: Record<string, unknown[]> = {};
+  async function scan(screen: string) {
+    const results = await new AxeBuilder({ page })
+      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+      .analyze();
+    audit[screen] = results.violations.map((violation) => ({
+      id: violation.id, impact: violation.impact, help: violation.help,
+      nodes: violation.nodes.map((node) => ({ target: node.target, summary: node.failureSummary })),
+    }));
+    for (const violation of results.violations) {
+      for (const node of violation.nodes) {
+        violations.push(`${screen} / ${violation.id}: ${node.target.join(" ")} — ${node.failureSummary || violation.help}`);
+      }
+    }
+  }
+
+  await page.goto("/");
+  await scan("login");
+  await page.getByRole("button", { name: /Case owner/i }).click();
+  await expect(page.getByRole("heading", { name: "Choose an investigation" })).toBeVisible();
+  await scan("case selection");
+  const caseRow = page.locator(".case-row").filter({ hasText: caseTitle });
+  await caseRow.getByRole("button", { name: /Open case/i }).click();
+  await expect(page.getByRole("heading", { name: "Situation awareness" })).toBeVisible();
+  await scan("overview");
+
+  const views = [
+    ["Alerts", ".review-detail"],
+    ["Accounts", ".account-evidence"],
+    ["Narratives", ".narrative-detail"],
+    ["Network & behavior", ".behavior-table"],
+    ["Geospatial", ".geo-map svg"],
+    ["Media lab", ".media-detail"],
+    ["Findings & review", ".finding-card"],
+    ["Connectors", ".access-table"],
+  ] as const;
+  for (const [label, selector] of views) {
+    await page.locator(".workspace-nav").getByRole("button", { name: label, exact: true }).click();
+    await expect(page.locator(selector).first()).toBeVisible();
+    await scan(label);
+  }
+  const reportPath = test.info().outputPath("axe-wcag-report.json");
+  await writeFile(reportPath, JSON.stringify(audit, null, 2), "utf8");
+  await test.info().attach("axe-wcag-report.json", { path: reportPath, contentType: "application/json" });
+  expect(violations).toEqual([]);
 });

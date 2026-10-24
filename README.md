@@ -14,16 +14,17 @@ It is deliberately **an investigation tool, not an accusation engine**:
 
 | Area | What is real in this repository | Important boundary |
 |---|---|---|
-| Case investigation | Case-scoped RBAC, evidence records, typed graph, review workflow, audit events, exports | Development tokens must be replaced before deployment |
+| Case investigation | Case-scoped RBAC, verified OIDC/JWKS authentication, pre-provisioned identities, typed graph, durable review workflow, audit events, exports | Development tokens are local-only; production requires explicit OIDC configuration and provisioning |
 | Authorized imports | Public URL/text intake; JSON/CSV/signature-checked image upload; raw snapshots and hashes | Import authorization and platform terms remain the operator’s responsibility |
 | Public social source | Bounded Mastodon public-hashtag collection through the selected instance’s official API | One page, no private/unlisted statuses; instances may disable public preview |
 | YouTube and fact checks | Official YouTube commentThreads and Google Fact Check adapters | Require server-side API keys; quota/access failures remain visible |
 | Public-infrastructure OSINT | DNS-over-HTTPS, IANA-bootstrapped RDAP, bounded web metadata, crt.sh CT observations, Wayback availability | Passive/bounded research only; no scanning, breach lookup, login bypass, or private identity resolution |
 | Narratives | TF-IDF/cosine similarity clusters, representative posts, timelines, observed propagation order, cross-account similarity | Similarity is not proof of orchestration; clustering input is bounded |
+| Investigation navigation | Case-scoped global search, URL deep links, account evidence detail, explicit source/first-seen/collection timestamps | Search is bounded per entity class; no cross-case read-all endpoint |
 | Account behavior | Transparent duplicate-text, timing, regularity, and posting-rate indicators with evidence coverage | Explicitly **not calibrated bot probability** |
-| Network analysis | Account links derived from the evidence graph, fact/hypothesis edge separation, observed connected components | No inferred shared identity or intent |
-| Geospatial analysis | Aggregated points from supplied metadata/authorized imports, timelines, baseline/anomaly review cues | Not live device tracking; missing location data is a coverage limitation |
-| Early warnings | Explainable narrative-acceleration and geo-spike attention rules with evidence IDs and recommended review action | Attention scores are triage rules, not threat probabilities |
+| Network analysis | Separate fact/hypothesis PageRank and betweenness, Louvain communities, connected components, articulation-point bridge candidates | Bounded observed graph only; no inferred reach, shared identity or intent; cascade depth requires real repost/reply edges |
+| Geospatial analysis | Aggregated points, timelines, baseline cues, distinct-subject minimum-group suppression (default k=3), approximate exact-point labels | Not live device tracking; suppressed/missing location data is a coverage limitation |
+| Early warnings | Persistent narrative/geo/coordination/data-gap cues, active history, analyst status/notes, evidence-completeness score, audited review | Attention and evidence-completeness scores are uncalibrated triage aids, not threat/truth probabilities |
 | Media screening | SHA-256, pHash, selected metadata, possible provenance-marker bytes, bounded pixel/JPEG residual measurements | C2PA byte markers are not cryptographic validation; residuals are not manipulation verdicts |
 | Optional synthetic-image model | A configured local Hugging Face image classifier can return raw labels and an uncalibrated label-aggregation score | No score when no model is configured; model/threshold validation is still required |
 | Existing analysis pipelines | Image matching, comments, coordination candidates, claims, metadata-first location findings, bounded agent, jobs and exports | See method notes and per-result limitations |
@@ -58,24 +59,27 @@ The same matrix appears in the workspace under **Connectors**. “No API key” 
 
 The black/neon-green/JetBrains Mono interface uses [osint-ui.com](https://osint-ui.com/en) solely as its visual reference. Scamurai retains its own coordinated-disinformation workflows; unrelated reference-site tools are not included.
 
-- **Overview:** evidence coverage, data gaps, priority review cues, and narrative pulse.
-- **Narratives:** timelines, representative evidence, propagation order, and explainable acceleration rules.
+- **Overview:** evidence coverage, data gaps, unresolved priority cues, and narrative pulse.
+- **Alerts:** persistent active/inactive history, evidence-completeness method, analyst notes and audited review decisions.
+- **Accounts & global search:** account drill-down, exact shared URLs, post provenance, and reload-safe case/entity deep links.
+- **Narratives:** timelines, representative evidence, propagation order, source-vs-collection timestamps, and explainable acceleration rules.
 - **Geospatial:** an offline bundled Natural Earth map plus aggregate location tables—no external map-tile tracking.
 - **Live OSINT:** selectable source modules, per-source success/empty/limited/failed states, report history, raw evidence, and JSON export.
-- **Network & behavior:** observed account graph and transparent automation indicators.
+- **Network & behavior:** observed account graph, separate fact/hypothesis centrality and communities, bridge candidates, and transparent automation indicators.
 - **Media lab:** authorized media previews, integrity/metadata/pixel observations, model availability, and limitations.
 - **Evidence tools:** typed graph, entity explorer, comments, findings review, account comparison, exports, connectors, and bounded agent.
 - Responsive layouts, visible loading/empty/error states, role-aware controls, bundled fonts, and reduced-motion support.
 
 ## Quickstart
 
-Requirements: **Python 3.13+** and **Node.js `^20.19` or `>=22.12`** (Vite 8 requirement). No database server or API key is needed for local authorized imports and deterministic analysis.
+Requirements: **Python 3.12+** and **Node.js `^20.19` or `>=22.12`** (Vite 8 requirement). No database server or provider API key is needed for local authorized imports and deterministic analysis.
 
 ```bash
 # Backend — terminal 1
 cd backend
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+alembic upgrade head
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 # Frontend — terminal 2
@@ -94,12 +98,15 @@ make run-api       # terminal 1
 make run-web       # terminal 2
 ```
 
-Docker Compose remains available for the PostgreSQL/Redis/MinIO development stack:
+Docker Compose runs the integrated development stack: PostgreSQL, Redis, a real Celery worker, private MinIO/S3 storage, Alembic migration, FastAPI and the UI:
 
 ```bash
 cp .env.example .env
 docker compose up --build
+# Later: docker compose down        # add -v only when intentionally deleting all local data
 ```
+
+The CI `compose-smoke` job builds this stack and verifies real S3 snapshot/media upload and readback plus Celery forensic-job completion before Pages deployment. Production OIDC, existing-database migration and external AWS/S3 settings are in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
 ### Development roles
 
@@ -107,10 +114,12 @@ docker compose up --build
 |---|---|---|
 | Owner | `dev-token-owner` | Case administration, collection, analysis, review, export |
 | Analyst | `dev-token-analyst` | Collection and analysis workflows |
-| Reviewer | `dev-token-reviewer` | Findings review |
+| Reviewer | `dev-token-reviewer` | Findings and alert review |
 | Viewer | `dev-token-viewer` | Read-only access to cases shared with that user |
 
 Paste either the token itself or the full `Bearer dev-token-owner` value; the client normalizes it. These are local development conveniences, **not production authentication**.
+
+For production, set `SCAMURAI_ENVIRONMENT=production` and `SCAMURAI_DEV_AUTH_ENABLED=false`, then configure issuer, audience and JWKS. Startup rejects development tokens in production. API tokens are verified for RS256 (or an explicit allowlist), signature, issuer, audience, expiry and required claims, then mapped to a pre-provisioned user. The browser currently accepts a bearer access token directly; an interactive OIDC Authorization Code + PKCE login flow is **not yet implemented**. See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
 ### Live session behavior
 
@@ -132,7 +141,9 @@ GitHub Pages can host the static UI, but it cannot run FastAPI or OSINT workers.
    ```
 4. Keep provider credentials and bearer/PAT tokens out of Actions variables, frontend code, static artifacts, Git history, and remote URLs. Any `VITE_*` value is public in the built JavaScript.
 
-A public backend also needs production authentication, TLS, CORS restrictions, and the deployment controls in [`docs/SECURITY.md`](docs/SECURITY.md). Development tokens are not a safe public authentication solution.
+`frontend/public/404.html` is included in the Pages artifact. It recovers path-style links such as `/scamurai/cases/{case}/alerts/{alert}`, `/scamurai/accounts/{account}` and `/scamurai/posts/{post}` into the canonical query-based workspace, while unknown routes remain an honest not-found page. Keep its `/scamurai/` base aligned if the repository/path is renamed.
+
+A public backend must use the implemented production OIDC verification, TLS, CORS restrictions, durable PostgreSQL/Celery/S3 services, a suitable browser token flow, and the deployment controls in [`docs/SECURITY.md`](docs/SECURITY.md). Development tokens are not a safe public authentication solution.
 
 ## Optional configuration
 
@@ -160,7 +171,10 @@ A Hugging Face model also requires the optional `transformers`/`torch` dependenc
 - Timelines use hour/day/week buckets according to the observed span and preserve undated-item counts.
 - Acceleration compares the latest bucket with the preceding three buckets. Its attention score and rule inputs are returned with evidence IDs.
 - Automation indicators expose the raw feature values, triggered rules, formula, timestamp coverage, and limitations. They are not “percent bot” values.
-- Geospatial points are rounded aggregates for display. They describe supplied/reported location observations, not a person’s current position.
+- Geospatial points are rounded aggregates for display. Cells below `SCAMURAI_GEO_MIN_GROUP_SIZE` distinct subjects are suppressed; exact supplied points are explicitly labelled. These are not current person locations.
+- Centrality/communities and cascade depth use only observed edges; fact and hypothesis graph families remain separate. No PageRank or degree value is represented as external reach.
+- Post provenance distinguishes source publication, first-seen and Scamurai collection timestamps; normalized string imports do not silently become `first_seen_at`.
+- Alerts retain an evidence-completeness score and method. The score is an uncalibrated review-completeness aid, not truth/threat confidence.
 - Media integrity and screening observations remain separate from optional model output.
 - Every OSINT report is stored as a hash-manifested evidence snapshot with independent module outcomes.
 
@@ -172,7 +186,11 @@ All case routes require a bearer token and case membership.
 
 | Route | Purpose |
 |---|---|
-| `GET /api/v1/cases/{id}/analytics` | Narratives, behavior, network, geospatial coverage, and review alerts |
+| `GET /api/v1/cases/{id}/analytics` | Narratives, behavior, graph metrics, geospatial coverage, and review cues |
+| `GET /api/v1/cases/{id}/alerts` | Persistent cues and analyst review history |
+| `PATCH /api/v1/cases/{id}/alerts/{alert_id}` | Reviewer/owner status, priority and note update with audit event |
+| `GET /api/v1/cases/{id}/accounts` and `…/accounts/{account_id}` | Account inventory and exact evidence detail |
+| `GET /api/v1/cases/{id}/search?q=…` | Bounded, grouped account/post/finding/alert/evidence search |
 | `POST /api/v1/cases/{id}/osint/investigate` | Bounded public-source investigation |
 | `GET /api/v1/cases/{id}/osint/reports` | Saved report history |
 | `GET /api/v1/cases/{id}/osint/reports/{report_id}` | Full source-attributed report |
@@ -187,21 +205,26 @@ Existing case, input, graph, comment, claim, review, export, agent, and provider
 
 ```bash
 # Hermetic backend suite (provider HTTP is mocked)
-cd backend && python -m pytest tests/ -q
+cd backend
+pip install -r requirements-dev.txt
+alembic upgrade head && alembic check
+python -m pytest tests/ -q
+bandit -q -r app -x tests
+pip-audit -r requirements.txt
 
 # Production frontend build and dependency audit
-cd frontend && npm ci && npm run build && npm audit --audit-level=moderate
+cd ../frontend
+npm ci && npm run build && npm audit --audit-level=moderate
 
 # Browser tests: start API :8000 and Vite :5173 first
 npx playwright install chromium
 npm run test:e2e
 
 # Optional isolated QA fixtures and metric harness; not investigation input
-make fixtures
-make eval
+cd .. && make fixtures && make eval
 ```
 
-The Playwright suite creates its own clearly labelled validation case through the real API, so it needs neither a pre-seeded database nor an external provider. Its five checks cover real findings review, bearer-token normalization, API/access requirements, mobile overflow, hosted remote-API configuration and 401 handling, and the rule that a live transport failure must not substitute demo evidence.
+The Playwright suite creates its own clearly labelled validation case through the real API, so it needs neither a pre-seeded database nor an external provider. Its ten checks cover real findings review, bearer-token normalization, API/access requirements, mobile overflow, hosted remote-API configuration and 401 handling, live transport failure without demo substitution, account/post deep-link reloads, persistent alert review, axe WCAG A/AA scans across 10 core screens (all detected rule impacts gated), and production Pages 404 recovery for path-style case/evidence links plus honest unknown routes. GitHub Actions additionally performs migration downgrade/re-upgrade and a disposable Compose/PostgreSQL/MinIO/Celery smoke before deployment.
 
 The latest point-in-time results and external-source connectivity checks are recorded in [`docs/VALIDATION.md`](docs/VALIDATION.md). Connectivity is not an accuracy benchmark.
 
@@ -211,7 +234,7 @@ The latest point-in-time results and external-source connectivity checks are rec
 - Validation-time DNS checks do not by themselves eliminate DNS-rebinding/TOCTOU risk. Internet-facing multi-tenant deployment still needs network egress policy and, where feasible, connection-level DNS pinning.
 - Uploaded images are checked by signature, size, and decode limits. Protected media previews use authenticated blob retrieval.
 - Provider content is untrusted data, not agent instructions. Keys remain server-side.
-- Replace dev tokens, configure TLS/IdP/PostgreSQL/durable workers/private object storage, and complete jurisdiction-specific privacy, retention, and evidence-handling review before deployment.
+- Disable dev auth and configure verified OIDC plus pre-provisioned users; add a safe browser token flow before public rollout. Configure TLS/PostgreSQL/durable Celery/private object storage, and complete jurisdiction-specific privacy, retention, and evidence-handling review before deployment.
 
 More detail: [`docs/SECURITY.md`](docs/SECURITY.md), [`docs/INTEGRATIONS.md`](docs/INTEGRATIONS.md), and [`docs/USAGE.md`](docs/USAGE.md).
 
@@ -219,11 +242,13 @@ More detail: [`docs/SECURITY.md`](docs/SECURITY.md), [`docs/INTEGRATIONS.md`](do
 
 ```text
 backend/app/
-  routers/       cases, runs, graph, comments, connectors, osint, analytics, media, exports, agent
-  services/      evidence pipelines, analytics, OSINT, media screening, providers, jobs, exports
+  routers/       cases, accounts, alerts, search, runs, graph, comments, connectors, OSINT, analytics, media, exports, agent
+  services/      evidence pipelines, analytics, persistent alerts, OSINT, media screening, providers, jobs, storage, exports
   models.py      case-scoped evidence, source access, graph, reports and forensic records
-  config.py      SCAMURAI_-prefixed runtime settings
-backend/tests/   acceptance, security, provider, intelligence and configuration tests
+  config.py      fail-closed SCAMURAI_-prefixed runtime settings
+backend/alembic/ ordered baseline and OIDC/provenance/alert migrations
+backend/scripts/ evaluation, OIDC provisioning and disposable Compose smoke
+backend/tests/   acceptance, security, provider, intelligence, configuration and operations tests
 frontend/src/
   components/    mission dashboards, source workbench, graph/evidence and review views
   lib/           typed live-only API client and shared types

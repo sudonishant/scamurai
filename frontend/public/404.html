@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#090c09">
+  <title>Route recovery · Scamurai</title>
+  <style>
+    :root { color-scheme: dark; --bg: #090c09; --panel: #111411; --text: #e4ebe4; --muted: #a1aaa1; --green: #a6ff4d; --border: #293229; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; background: radial-gradient(circle at 50% 0, #172117, var(--bg) 55%); color: var(--text); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+    main { width: min(620px, 100%); padding: clamp(24px, 6vw, 48px); border: 1px solid var(--border); border-radius: 16px; background: rgba(17,20,17,.96); box-shadow: 0 24px 80px #0008; }
+    .eyebrow { color: var(--green); font-size: 11px; letter-spacing: .16em; }
+    h1 { margin: 10px 0 24px; font-size: clamp(28px, 7vw, 48px); letter-spacing: .08em; }
+    h2 { margin: 0 0 12px; font-size: 18px; }
+    p { color: var(--muted); line-height: 1.7; font-size: 13px; overflow-wrap: anywhere; }
+    a { display: inline-flex; margin-top: 14px; padding: 11px 16px; border-radius: 8px; background: var(--green); color: #10150c; font-weight: 700; text-decoration: none; }
+    a:focus-visible { outline: 3px solid #fff; outline-offset: 4px; }
+    noscript p { color: var(--text); }
+  </style>
+</head>
+<body>
+  <main>
+    <span class="eyebrow">INVESTIGATION ROUTE RECOVERY</span>
+    <h1>SCAMURAI</h1>
+    <h2 id="status">Checking investigation link…</h2>
+    <p id="detail">Known path-style links are restored to the live workspace without losing case or evidence identifiers.</p>
+    <a id="home" href="/scamurai/">Open live workspace</a>
+    <noscript><p>JavaScript is disabled. Use the workspace link above; investigation deep-link recovery requires JavaScript.</p></noscript>
+  </main>
+  <script>
+    (() => {
+      "use strict";
+      const BASE = "/scamurai/";
+      const tabs = {
+        overview: "overview", alerts: "alerts", narratives: "narratives",
+        geo: "geo", geospatial: "geo", osint: "osint", accounts: "accounts",
+        network: "network", graph: "graph", entities: "entities", media: "media",
+        comments: "comments", findings: "findings", compare: "compare",
+        connectors: "connectors", exports: "exports", agent: "agent"
+      };
+      const focus = { alerts: "alert", accounts: "account", findings: "finding", narratives: "post" };
+      const safeDecode = (value) => { try { return decodeURIComponent(value); } catch { return value; } };
+      const segments = window.location.pathname.startsWith(BASE)
+        ? window.location.pathname.slice(BASE.length).split("/").filter(Boolean).map(safeDecode)
+        : [];
+      const params = new URLSearchParams(window.location.search);
+      let route = "";
+      let entity = "";
+      let recovered = false;
+
+      if (segments[0] === "cases" && segments[1]) {
+        params.set("case", segments[1]);
+        route = segments[2] || "overview";
+        entity = segments[3] || "";
+      } else if (segments[0] === "posts" && segments[1]) {
+        route = "narratives";
+        entity = segments[1];
+        params.set("tab", "narratives");
+        params.set("post", entity);
+        recovered = true;
+      } else if (segments[0] === "evidence" && segments[1]) {
+        params.set("tab", "graph");
+        params.set("evidence", segments[1]);
+        recovered = true;
+      } else {
+        route = segments[0] || "";
+        entity = segments[1] || "";
+      }
+
+      if (!recovered && tabs[route] && segments.length <= (segments[0] === "cases" ? 4 : 2)) {
+        params.set("tab", tabs[route]);
+        if (entity && focus[route]) params.set(focus[route], entity);
+        else if (entity) recovered = false;
+        if (!entity || focus[route]) recovered = true;
+      }
+
+      if (recovered) {
+        const query = params.toString();
+        window.location.replace(`${BASE}${query ? `?${query}` : ""}${window.location.hash}`);
+        return;
+      }
+
+      document.getElementById("status").textContent = "Investigation route not found";
+      document.getElementById("detail").textContent =
+        "This is not a valid Scamurai view or evidence link. No investigation data was substituted. Return to the live workspace and choose an available case.";
+    })();
+  </script>
+</body>
+</html>

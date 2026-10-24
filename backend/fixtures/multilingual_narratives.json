@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "synthetic": true,
+  "description": "Small labelled diagnostic pairs for the actual lexical narrative candidate method. Not a representative benchmark, training set, or coordination ground truth.",
+  "threshold": 0.48,
+  "labels": {
+    "same_narrative": "The pair is annotated as referring to the same synthetic event/update; this does not imply coordination.",
+    "different_narrative": "The pair is annotated as different events/claims, including benign shared-topic controls."
+  },
+  "pairs": [
+    {
+      "id": "lex-en-same-01",
+      "track": "same_language_lexical",
+      "languages": ["en", "en"],
+      "label": "same_narrative",
+      "left": "North Bridge is closed after flooding on the eastern road.",
+      "right": "Flooding on the eastern road has closed North Bridge."
+    },
+    {
+      "id": "lex-hi-same-01",
+      "track": "same_language_lexical",
+      "languages": ["hi", "hi"],
+      "label": "same_narrative",
+      "left": "बाढ़ के कारण उत्तरी पुल और पूर्वी सड़क बंद हैं।",
+      "right": "उत्तरी पुल तथा पूर्वी सड़क बाढ़ के कारण बंद हैं।"
+    },
+    {
+      "id": "lex-hinglish-same-01",
+      "track": "same_language_lexical",
+      "languages": ["hi-Latn", "hi-Latn"],
+      "label": "same_narrative",
+      "left": "Baadh ke kaaran North Bridge aur eastern road band hain.",
+      "right": "North Bridge aur eastern road baadh ke kaaran band hain."
+    },
+    {
+      "id": "lex-mixed-same-01",
+      "track": "same_language_lexical",
+      "languages": ["hi-en", "hi-en"],
+      "label": "same_narrative",
+      "left": "North Bridge बाढ़ के कारण बंद है; eastern road avoid करें।",
+      "right": "Eastern road avoid करें क्योंकि North Bridge बाढ़ के कारण बंद है।"
+    },
+    {
+      "id": "semantic-en-hi-01",
+      "track": "cross_lingual_semantic_equivalence",
+      "languages": ["en", "hi"],
+      "label": "same_narrative",
+      "left": "North Bridge is closed because of flooding.",
+      "right": "बाढ़ के कारण उत्तरी पुल बंद है।"
+    },
+    {
+      "id": "semantic-en-hinglish-01",
+      "track": "cross_lingual_semantic_equivalence",
+      "languages": ["en", "hi-Latn"],
+      "label": "same_narrative",
+      "left": "The eastern road is closed because of flooding.",
+      "right": "Eastern road baadh ke kaaran band hai."
+    },
+    {
+      "id": "semantic-hi-en-02",
+      "track": "cross_lingual_semantic_equivalence",
+      "languages": ["hi", "en"],
+      "label": "same_narrative",
+      "left": "भूकंप के बाद केंद्रीय बाजार क्षेत्र खाली कराया गया।",
+      "right": "The central market area was evacuated after the earthquake."
+    },
+    {
+      "id": "semantic-hi-hinglish-02",
+      "track": "cross_lingual_semantic_equivalence",
+      "languages": ["hi", "hi-Latn"],
+      "label": "same_narrative",
+      "left": "तेज हवा के कारण बंदरगाह पर सामान उतारना रोक दिया गया।",
+      "right": "Tez hawa ke kaaran bandargah par samaan utaarna rok diya gaya."
+    },
+    {
+      "id": "control-en-status-01",
+      "track": "different_narrative_controls",
+      "languages": ["en", "en"],
+      "label": "different_narrative",
+      "control": "same_place_different_status",
+      "left": "North Bridge is closed after flooding on the eastern road.",
+      "right": "North Bridge has reopened after repairs on the eastern road."
+    },
+    {
+      "id": "control-en-place-02",
+      "track": "different_narrative_controls",
+      "languages": ["en", "en"],
+      "label": "different_narrative",
+      "control": "different_place_same_template",
+      "left": "North Bridge is closed after flooding on the eastern road.",
+      "right": "South Bridge is closed after flooding on the western road."
+    },
+    {
+      "id": "control-hi-event-01",
+      "track": "different_narrative_controls",
+      "languages": ["hi", "hi"],
+      "label": "different_narrative",
+      "control": "same_place_different_event",
+      "left": "बाढ़ के कारण उत्तरी पुल बंद है।",
+      "right": "मरम्मत पूरी होने के बाद उत्तरी पुल खुल गया है।"
+    },
+    {
+      "id": "control-hinglish-event-01",
+      "track": "different_narrative_controls",
+      "languages": ["hi-Latn", "hi-Latn"],
+      "label": "different_narrative",
+      "control": "same_topic_different_claim",
+      "left": "North Bridge baadh ke kaaran band hai.",
+      "right": "North Bridge repair ke baad khul gaya hai."
+    },
+    {
+      "id": "control-en-unrelated-01",
+      "track": "different_narrative_controls",
+      "languages": ["en", "en"],
+      "label": "different_narrative",
+      "control": "unrelated_public_updates",
+      "left": "The public library extends weekend opening hours.",
+      "right": "The central station announced a new ticket counter."
+    },
+    {
+      "id": "control-cross-topic-01",
+      "track": "different_narrative_controls",
+      "languages": ["hi", "en"],
+      "label": "different_narrative",
+      "control": "cross_lingual_unrelated",
+      "left": "सार्वजनिक पुस्तकालय रविवार को अधिक समय तक खुलेगा।",
+      "right": "The football club published its practice schedule."
+    }
+  ]
+}

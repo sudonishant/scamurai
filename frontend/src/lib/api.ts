@@ -1,7 +1,7 @@
 // Live-only typed API client. Every result comes from FastAPI; there is no demo-data path.
 import type {
-  AgentRunResult, AnalyticsData, Capability, Case, CommentRow, ExportRecord, Finding,
-  GraphData, Job, MediaForensicsResult, OsintReport, OsintReportSummary,
+  AccountDetail, AccountSummary, AgentRunResult, AlertItem, AnalyticsData, Capability, Case, CommentRow, ExportRecord, Finding,
+  GraphData, Job, MediaForensicsResult, OsintReport, OsintReportSummary, SearchResponse,
 } from "./types";
 
 const TOKEN_KEY = "scamurai.devToken";
@@ -165,6 +165,11 @@ export const api = {
   exports: (caseId: string) => request<ExportRecord[]>(`/api/v1/cases/${caseId}/exports`),
   registry: () => request<unknown>("/api/v1/registry"),
   analytics: (caseId: string) => request<AnalyticsData>(`/api/v1/cases/${caseId}/analytics`),
+  accounts: (caseId: string, q = "") => request<AccountSummary[]>(`/api/v1/cases/${caseId}/accounts${q ? `?q=${encodeURIComponent(q)}` : ""}`),
+  accountDetail: (caseId: string, accountId: string) => request<AccountDetail>(`/api/v1/cases/${caseId}/accounts/${encodeURIComponent(accountId)}`),
+  alerts: (caseId: string, active?: boolean) => request<AlertItem[]>(`/api/v1/cases/${caseId}/alerts${active === undefined ? "" : `?active=${active}`}`),
+  reviewAlert: (caseId: string, alertId: string, status: string, note: string) => request<AlertItem>(`/api/v1/cases/${caseId}/alerts/${encodeURIComponent(alertId)}/review`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status, note }) }),
+  search: (caseId: string, query: string) => request<SearchResponse>(`/api/v1/cases/${caseId}/search?q=${encodeURIComponent(query)}`),
   investigateOsint: (caseId: string, target: string, modules?: string[]) => request<OsintReport>(`/api/v1/cases/${caseId}/osint/investigate`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ target, modules }) }),
   osintReports: (caseId: string) => request<OsintReportSummary[]>(`/api/v1/cases/${caseId}/osint/reports`),
   osintReport: (caseId: string, reportId: string) => request<OsintReport>(`/api/v1/cases/${caseId}/osint/reports/${reportId}`),

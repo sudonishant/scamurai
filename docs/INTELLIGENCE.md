@@ -18,7 +18,7 @@ No heuristic or model result is silently promoted to a source fact. The investig
 
 Implementation: `backend/app/services/analytics.py`.
 
-1. Unicode tokens of at least three characters are case-folded; numeric tokens and a small English/Hindi/Hinglish stopword list are removed.
+1. Text is NFKC-normalized and case-folded. Unicode letters/numbers and combining marks are preserved, so Indic vowel signs/virama are not deleted during punctuation normalization. Tokens of at least three characters are retained; numeric tokens and a small English/Hindi/Hinglish stopword list are removed.
 2. Lexical TF-IDF vectors are computed within the case corpus.
 3. Exact normalized text or cosine similarity `>= 0.48` joins posts into candidate clusters.
 4. The latest 500 collected posts are the clustering input; `narrative_input_truncated` discloses truncation.
@@ -27,7 +27,9 @@ Implementation: `backend/app/services/analytics.py`.
 
 **Earliest observed** is the earliest timestamp in that candidate cluster and collected corpus. It is not first uploader, original author, campaign originator, or platform-wide first occurrence.
 
-Lexical similarity can group quotations, press releases, breaking-news updates, hashtags and ordinary viral sharing. Short texts, code-switching, sarcasm and translated retellings require human review.
+Lexical similarity can group quotations, press releases, breaking-news updates, hashtags and ordinary viral sharing. Short texts, code-switching, sarcasm and translated retellings require human review. No multilingual embedding/semantic model is configured in production: a low cross-lingual lexical cosine is not semantic dissimilarity, and the method does not claim translation-level recall.
+
+`backend/scripts/evaluate_multilingual.py` runs a small synthetic pairwise diagnostic against this exact method. `notebooks/multilingual_semantic_evaluation.ipynb` supports an optional, separately reviewed public embedding-model experiment. Neither is a representative accuracy benchmark or a production ingestion path.
 
 ## Narrative-acceleration review cue
 
@@ -40,6 +42,22 @@ latest >= 2 * max(previous_three_bucket_mean, 0.25)
 ```
 
 The attention value is a bounded rule score using acceleration, latest count and account count. The response includes baseline values, ratio, formula rule and evidence IDs. It is not a probability. A real-world event or changed import coverage can produce the same cue.
+
+## Persistent review cues and evidence completeness
+
+Narrative, geo, coordination and data-gap cues are reconciled into persistent case alert rows. Active/inactive history, evidence IDs, review state, priority, analyst note and review timestamps survive recomputation. Resolved/dismissed decisions are not silently reset by an analytics refresh; reviewer/owner changes create audit events.
+
+For narrative and coordination cues, an evidence-completeness screening value is:
+
+```text
+100 * (
+  .30 * min(visible_evidence_posts / 20, 1)
++ .30 * source_timestamp_coverage
++ .40 * min(platform_diversity_count / 2, 1)
+)
+```
+
+Scores with zero/one visible platform are capped at 60. The value measures visible evidence completeness only. It is uncalibrated, is not a truth/threat probability, and platform diversity is not necessarily independent corroboration. Geo/data-gap cues return `not_applicable` rather than an invented confidence value.
 
 ## Account-behavior indicators
 
@@ -63,11 +81,15 @@ This is **not bot probability**. Newsrooms, schedulers, community campaigns and 
 
 Only case-graph account-to-account edges named `PUBLICLY_CROSSLINKS` or `POSSIBLY_COORDINATED_WITH` enter this view. Fact and hypothesis degrees remain separate. Connected components are computed over those observed edges.
 
-A component does not prove common ownership, coordination, intent, reach or influence. Graph degree is degree inside the collected case graph, not platform-wide audience influence.
+PageRank and betweenness are computed separately for the fact and hypothesis edge classes. Betweenness is exact up to 200 nodes and sampled with at most 100 deterministic-seed source nodes above that size; graph-metric computation is skipped above 2,000 nodes. Louvain communities use deterministic seed 42. Bridge candidates are articulation points whose removal would disconnect the corresponding observed graph. All values describe this bounded case graph only.
+
+Cascade depth is reported as unavailable unless a real repost/reply DAG is available; lexical similarity and timestamp order are not substituted for cascade edges. A component, community, centrality value or articulation point does not prove common ownership, coordination, intent, reach or influence.
 
 ## Geospatial baselines
 
 Location observations come from imported/source-supplied metadata and preserve their source and precision. Display points are averages rounded to two decimal places, with intensity based on aggregate count. This is not current device/person tracking.
+
+Groups below `SCAMURAI_GEO_MIN_GROUP_SIZE` distinct observed subjects (default 3) are suppressed, with suppressed group/observation counts reported. One prolific account cannot cross the threshold; unlinked posts remain separate observed subjects. Exact supplied points are labelled as approximate areas in display rather than represented as anonymous aggregates. This reduces incidental exposure but is not a complete re-identification guarantee.
 
 When at least four time buckets exist, a geo review spike requires:
 
@@ -96,6 +118,8 @@ This path is for images, not a claim of video/deepfake coverage. A high score do
 ## Public-source OSINT provenance
 
 Each module has independent `successful`, `successful_empty`, `partial`, or failure/limited outcomes. Reports are canonicalized, SHA-256 hashed, stored as evidence snapshots, and linked to `SourceAccess` rows.
+
+Post/account provenance distinguishes the source publication timestamp, `first_seen_at` and `collected_at`. Normalized imports must not silently treat an ingest timestamp as the source publication time; missing source timestamps remain unknown. UI propagation language is earliest observed inside the collected corpus, not originator attribution.
 
 | Module | Method and official reference | Interpretation boundary |
 |---|---|---|

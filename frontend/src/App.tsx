@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import StartScreen from "./components/StartScreen";
 import Workspace from "./components/Workspace";
 import Icon from "./components/Icon";
@@ -8,12 +8,34 @@ import { getApiUrl, setApiUrl } from "./lib/api";
 interface Props { onLogout: () => void }
 
 export default function App({ onLogout }: Props) {
-  const [openCase, setOpenCase] = useState<string | null>(null);
+  const [openCase, setOpenCase] = useState<string | null>(() => new URLSearchParams(window.location.search).get("case"));
   const [goal, setGoal] = useState("overview");
-  if (!openCase) {
-    return <div className="app"><MatrixBackdrop /><TopBar onLogout={onLogout} /><StartScreen onOpen={(id, g) => { setGoal(g); setOpenCase(id); }} /></div>;
+
+  useEffect(() => {
+    const restore = () => setOpenCase(new URLSearchParams(window.location.search).get("case"));
+    window.addEventListener("popstate", restore);
+    return () => window.removeEventListener("popstate", restore);
+  }, []);
+
+  function openInvestigation(id: string, selectedGoal: string) {
+    const url = new URL(window.location.href);
+    url.searchParams.set("case", id);
+    ["tab", "account", "alert", "post", "finding", "evidence"].forEach((key) => url.searchParams.delete(key));
+    window.history.pushState({ caseId: id }, "", url);
+    setGoal(selectedGoal); setOpenCase(id);
   }
-  return <div className="app"><MatrixBackdrop /><TopBar onLogout={onLogout} onHome={() => setOpenCase(null)} /><Workspace caseId={openCase} initialGoal={goal} /></div>;
+
+  function goHome() {
+    const url = new URL(window.location.href);
+    ["case", "tab", "account", "alert", "post", "finding", "evidence"].forEach((key) => url.searchParams.delete(key));
+    window.history.pushState({}, "", url);
+    setOpenCase(null);
+  }
+
+  if (!openCase) {
+    return <div className="app"><MatrixBackdrop /><TopBar onLogout={onLogout} onHome={goHome} /><StartScreen onOpen={openInvestigation} /></div>;
+  }
+  return <div className="app"><MatrixBackdrop /><TopBar onLogout={onLogout} onHome={goHome} /><Workspace key={openCase} caseId={openCase} initialGoal={goal} /></div>;
 }
 
 function TopBar({ onLogout, onHome }: { onLogout: () => void; onHome?: () => void }) {

@@ -103,7 +103,12 @@ def import_posts_bundle(db: Session, case_id: str, actor_id: str, payload: dict,
         existing = db.scalar(select(Post).where(
             Post.case_id == case_id, Post.source_id == row["source_id"]))
         if existing:
-            continue  # duplicate-safe re-import
+            # Duplicate-safe re-import still records the latest collection
+            # contact without moving the original first-seen timestamp.
+            existing.collected_at = utcnow()
+            if existing.first_seen_at is None:
+                existing.first_seen_at = existing.created_at
+            continue
         ts, precision = _parse_ts(row.get("timestamp"), row.get("timestamp_precision"))
         account = accounts.get(row.get("account_handle"))
         post = Post(

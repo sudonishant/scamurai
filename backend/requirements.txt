@@ -1,4 +1,4 @@
-# Scamurai backend — pinned loosely; verify versions at deployment
+# Scamurai runtime dependencies. Use requirements-dev.txt for tests/security tools.
 fastapi>=0.115
 uvicorn[standard]>=0.30
 pydantic>=2.7
@@ -11,12 +11,12 @@ numpy>=1.26
 reportlab>=4.0
 httpx>=0.27
 tldextract>=5.1
-pytest>=8.0
+PyJWT[crypto]>=2.8
+psycopg[binary]>=3.1
+celery[redis]>=5.4
+boto3>=1.34
+networkx>=3.2
 
-# Optional / heavier infrastructure (installed in docker images, not required for local SQLite dev)
-# psycopg[binary]>=3.1      # PostgreSQL driver (DATABASE_URL=postgresql+psycopg://...)
-# celery[redis]>=5.4        # durable worker queue when REDIS_URL is configured
-# boto3>=1.34               # S3-compatible object storage when S3_ENDPOINT is configured
-# pytesseract>=0.3.10       # OCR only when a tesseract binary is also available
-# transformers>=4.46        # optional local image classifier; also install an appropriate torch build
-# torch                     # optional; required only when DEEPFAKE_MODEL_ID is configured
+# Optional local OCR/model dependencies are intentionally not installed by default:
+# pytesseract requires a tesseract binary; transformers/torch are needed only when
+# DEEPFAKE_MODEL_ID is explicitly configured and evaluated for the deployment.

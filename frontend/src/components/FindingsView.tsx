@@ -31,7 +31,7 @@ function primaryBucket(finding: Finding): string {
 }
 
 export default function FindingsView(
-  { caseId, role, refreshToken, onChanged }: { caseId: string; role: string; refreshToken: number; onChanged: () => void },
+  { caseId, role, refreshToken, onChanged, initialFindingId }: { caseId: string; role: string; refreshToken: number; onChanged: () => void; initialFindingId?: string },
 ) {
   const [findings, setFindings] = useState<Finding[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,6 +47,11 @@ export default function FindingsView(
   }, [caseId]);
 
   useEffect(() => { setLoading(true); load(); }, [load, refreshToken]);
+  useEffect(() => {
+    if (initialFindingId && findings.some((row) => row.id === initialFindingId)) {
+      window.setTimeout(() => document.getElementById(`finding-${initialFindingId}`)?.scrollIntoView({ block: "center", behavior: "smooth" }), 60);
+    }
+  }, [initialFindingId, findings]);
 
   async function review(id: string, decision: string) {
     setBusyId(id);
@@ -72,7 +77,7 @@ export default function FindingsView(
           <div key={bucket.key} className="findings-group">
             <h4>{bucket.title} ({rows.length})</h4>
             {rows.map((finding) => (
-              <div key={finding.id} className="finding-card">
+              <div id={`finding-${finding.id}`} key={finding.id} className={`finding-card ${initialFindingId === finding.id ? "focused-evidence" : ""}`}>
                 <span className="badge">{finding.conclusion_category}</span>
                 <span className="badge" style={{ marginLeft: 6 }}>review: {finding.review_status}</span>
                 <p>{finding.question}</p>

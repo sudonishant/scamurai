@@ -63,7 +63,7 @@ def run_agent(body: AgentRunRequest,
             parameters={"via": "bounded_agent", "tool": call.tool},
             client_idempotency_key=f"{body.client_idempotency_key}:{workflow}")
         if created:
-            submit(job.id, pipeline.WORKFLOWS[workflow])
+            submit(job.id, job.kind)
         enqueued.append(job)
         return ToolResult(ok=True, output={"job_id": job.id, "workflow": workflow})
 

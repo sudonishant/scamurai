@@ -10,21 +10,27 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import re
 import statistics
+import unicodedata
 from collections import Counter, defaultdict
+
+import networkx as nx
 from datetime import datetime, timedelta, timezone
 from typing import Iterable
+from urllib.parse import urlparse
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..config import get_settings
 from ..models import (
     Account, CoordinationCandidate, GeoObservation, GraphEdge, GraphNode,
     MediaAsset, Post, SourceAccess, utcnow,
 )
+from .alerts import sync_alerts
 
-TOKEN_RE = re.compile(r"[^\W_]+", re.UNICODE)
+settings = get_settings()
+
 STOPWORDS = {
     "the", "and", "for", "that", "this", "with", "from", "are", "was", "were", "has", "have", "had",
     "you", "your", "yours", "our", "out", "all", "not", "but", "who", "what", "when", "where", "why", "how",
@@ -52,8 +58,21 @@ def _dt(value: datetime | None) -> datetime | None:
 
 
 def _tokens(text: str) -> list[str]:
-    return [token.casefold() for token in TOKEN_RE.findall(text or "")
-            if len(token) >= 3 and token.casefold() not in STOPWORDS and not token.isnumeric()]
+    """Unicode-aware tokens that retain combining marks inside words."""
+    normalized = unicodedata.normalize("NFKC", text or "").casefold()
+    tokens: list[str] = []
+    current: list[str] = []
+    for char in normalized:
+        if char.isalnum() or unicodedata.category(char).startswith("M"):
+            current.append(char)
+            continue
+        if current:
+            tokens.append("".join(current))
+            current = []
+    if current:
+        tokens.append("".join(current))
+    return [token for token in tokens
+            if len(token) >= 3 and token not in STOPWORDS and not token.isnumeric()]
 
 
 def _bucket_size(start: datetime | None, end: datetime | None) -> str:
@@ -220,6 +239,8 @@ def _build_narratives(posts: list[Post], accounts: dict[str, Account], truncated
                 "account_id": account_id,
                 "handle": accounts[account_id].handle if account_id in accounts else "unknown",
                 "first_observed": _iso(first.timestamp),
+                "source_timestamp": _iso(first.timestamp),
+                "first_seen_at": _iso(first.first_seen_at or first.created_at),
                 "post_id": first.id,
                 "role": "earliest_observed" if not propagation else "later_observed_amplification",
             })
@@ -244,7 +265,10 @@ def _build_narratives(posts: list[Post], accounts: dict[str, Account], truncated
                 "handle": accounts[first_dated.account_id].handle if first_dated.account_id in accounts else "unknown",
                 "url": first_dated.canonical_url,
                 "observed_at": _iso(first_dated.timestamp),
-                "scope": "Earliest timestamp in this collected corpus, not proof of platform-wide origin.",
+                "source_timestamp": _iso(first_dated.timestamp),
+                "first_seen_at": _iso(first_dated.first_seen_at or first_dated.created_at),
+                "collected_at": _iso(first_dated.collected_at or first_dated.created_at),
+                "scope": "Earliest source timestamp in this collected corpus, not proof of platform-wide origin; collection timestamps are separate.",
             } if first_dated else None),
             "propagation": propagation,
             "representative_posts": [{
@@ -252,6 +276,9 @@ def _build_narratives(posts: list[Post], accounts: dict[str, Account], truncated
                 "text": p.raw_text[:700],
                 "url": p.canonical_url,
                 "observed_at": _iso(p.timestamp),
+                "source_timestamp": _iso(p.timestamp),
+                "first_seen_at": _iso(p.first_seen_at or p.created_at),
+                "collected_at": _iso(p.collected_at or p.created_at),
                 "timestamp_precision": p.timestamp_precision,
                 "handle": accounts[p.account_id].handle if p.account_id in accounts else "unknown",
             } for p in cluster[:5]],
@@ -342,9 +369,51 @@ def _automation_indicators(posts: list[Post], accounts: dict[str, Account]) -> l
     return sorted(rows, key=lambda row: (row["automation_indicator_score"] is not None, row["automation_indicator_score"] or -1), reverse=True)
 
 
+def _class_graph_metrics(output_edges: list[dict], accounts: dict[str, Account],
+                         derivation_class: str) -> dict:
+    selected = [edge for edge in output_edges
+                if (edge["derivation_class"] == "fact") == (derivation_class == "fact")]
+    graph = nx.DiGraph()
+    graph.add_edges_from((edge["source_account_id"], edge["target_account_id"])
+                         for edge in selected)
+    empty = {"pagerank": {}, "betweenness": {}, "articulation": set(),
+             "communities": [], "status": "no_edges", "betweenness_method": "not_applicable"}
+    if not graph:
+        return empty
+    if len(graph) > 2000:
+        return {**empty, "status": "skipped_graph_over_2000_nodes"}
+
+    pagerank = nx.pagerank(graph, alpha=0.85, max_iter=100)
+    undirected = graph.to_undirected()
+    sampled = len(graph) > 200
+    betweenness = nx.betweenness_centrality(
+        undirected, k=min(100, len(graph) - 1) if sampled else None,
+        normalized=True, seed=42 if sampled else None,
+    )
+    communities = []
+    for index, community in enumerate(nx.community.louvain_communities(undirected, seed=42)):
+        members = sorted(community)
+        communities.append({
+            "id": f"{derivation_class}-community-{index + 1}",
+            "derivation_class": derivation_class,
+            "account_ids": members,
+            "handles": [accounts[account_id].handle for account_id in members if account_id in accounts],
+            "size": len(members),
+            "algorithm": "Louvain modularity, deterministic seed 42",
+            "note": "Community is structural grouping within this evidence class, not common ownership or intent.",
+        })
+    return {
+        "pagerank": pagerank,
+        "betweenness": betweenness,
+        "articulation": set(nx.articulation_points(undirected)),
+        "communities": communities,
+        "status": "computed",
+        "betweenness_method": "sampled_k_max_100_seed_42" if sampled else "exact",
+    }
+
+
 def _build_network(db: Session, case_id: str, accounts: dict[str, Account], posts: list[Post]) -> dict:
     account_nodes = db.scalars(select(GraphNode).where(GraphNode.case_id == case_id, GraphNode.entity_type == "account")).all()
-    node_by_entity = {node.entity_id: node for node in account_nodes}
     entity_by_node = {node.id: node.entity_id for node in account_nodes}
     edges = db.scalars(select(GraphEdge).where(GraphEdge.case_id == case_id)).all()
     output_edges = []
@@ -371,17 +440,34 @@ def _build_network(db: Session, case_id: str, accounts: dict[str, Account], post
         else:
             hypothesis_degree[source] += 1
             hypothesis_degree[target] += 1
+
+    fact_metrics = _class_graph_metrics(output_edges, accounts, "fact")
+    hypothesis_metrics = _class_graph_metrics(output_edges, accounts, "hypothesis")
     post_counts = Counter(p.account_id for p in posts if p.account_id)
-    rows = [{
-        "account_id": account_id,
-        "handle": account.handle,
-        "platform": account.platform,
-        "post_count": post_counts[account_id],
-        "fact_link_degree": fact_degree[account_id],
-        "hypothesis_link_degree": hypothesis_degree[account_id],
-        "observed_link_degree": len(adjacency[account_id]),
-        "scope": "Observed case-graph degree, not platform-wide influence or reach.",
-    } for account_id, account in accounts.items()]
+    rows = []
+    for account_id, account in accounts.items():
+        bridge_classes = [name for name, metrics in (("fact", fact_metrics), ("hypothesis", hypothesis_metrics))
+                          if account_id in metrics["articulation"]]
+        rows.append({
+            "account_id": account_id,
+            "handle": account.handle,
+            "platform": account.platform,
+            "post_count": post_counts[account_id],
+            "fact_link_degree": fact_degree[account_id],
+            "hypothesis_link_degree": hypothesis_degree[account_id],
+            "observed_link_degree": len(adjacency[account_id]),
+            "fact_pagerank": (round(fact_metrics["pagerank"][account_id], 6)
+                              if account_id in fact_metrics["pagerank"] else None),
+            "fact_betweenness": (round(fact_metrics["betweenness"][account_id], 6)
+                                 if account_id in fact_metrics["betweenness"] else None),
+            "hypothesis_pagerank": (round(hypothesis_metrics["pagerank"][account_id], 6)
+                                    if account_id in hypothesis_metrics["pagerank"] else None),
+            "hypothesis_betweenness": (round(hypothesis_metrics["betweenness"][account_id], 6)
+                                       if account_id in hypothesis_metrics["betweenness"] else None),
+            "bridge_candidate": bool(bridge_classes),
+            "bridge_evidence_classes": bridge_classes,
+            "scope": "Observed case-graph position, not platform-wide influence, reach or control.",
+        })
     rows.sort(key=lambda row: (row["fact_link_degree"], row["observed_link_degree"], row["post_count"]), reverse=True)
 
     visited: set[str] = set()
@@ -411,11 +497,29 @@ def _build_network(db: Session, case_id: str, accounts: dict[str, Account], post
         "nodes": rows,
         "edges": output_edges,
         "clusters": clusters,
-        "limitations": ["No follower count, private connection or platform-wide reach is inferred.", "Fact and hypothesis links remain separately labelled."],
+        "communities": fact_metrics["communities"] + hypothesis_metrics["communities"],
+        "metrics": {
+            "centrality_scope": "PageRank and betweenness are computed separately for fact and hypothesis edge classes; they are structural screening metrics, not influence probabilities.",
+            "fact_status": fact_metrics["status"],
+            "hypothesis_status": hypothesis_metrics["status"],
+            "fact_betweenness_method": fact_metrics["betweenness_method"],
+            "hypothesis_betweenness_method": hypothesis_metrics["betweenness_method"],
+            "bridge_definition": "Articulation point within the displayed fact or hypothesis graph; removing it would disconnect that observed structure.",
+            "cascade_depth": {
+                "status": "unavailable_no_repost_or_reply_dag",
+                "reason": "Actual parent/repost edges are required; lexical clusters and timestamp order are not a cascade.",
+            },
+        },
+        "limitations": [
+            "No follower count, private connection or platform-wide reach is inferred.",
+            "Fact and hypothesis links remain separately labelled, including centrality and communities.",
+            "Centrality and articulation describe this bounded observed graph only; they do not establish coordination, control or audience influence.",
+        ],
     }
 
 
-def _build_geo(observations: list[GeoObservation], post_to_narrative: dict[str, str]) -> tuple[dict, list[dict]]:
+def _build_geo(observations: list[GeoObservation], post_to_narrative: dict[str, str],
+               account_by_post: dict[str, str | None]) -> tuple[dict, list[dict]]:
     groups: dict[str, list[GeoObservation]] = defaultdict(list)
     for observation in observations:
         if observation.location_name:
@@ -426,12 +530,26 @@ def _build_geo(observations: list[GeoObservation], post_to_narrative: dict[str, 
             continue
         groups[key].append(observation)
     locations, points, anomalies = [], [], []
+    suppressed_groups = suppressed_observations = 0
+    minimum_group = settings.geo_min_group_size
     for key, rows in groups.items():
+        # Count distinct observed accounts, not raw post volume. Unlinked posts
+        # remain separate subjects so one prolific account cannot cross k.
+        subjects = {account_by_post.get(row.post_id) or f"unlinked-post:{row.post_id or row.id}"
+                    for row in rows}
+        if len(subjects) < minimum_group:
+            suppressed_groups += 1
+            suppressed_observations += len(rows)
+            continue
         dates = [_dt(row.observed_at) for row in rows if row.observed_at]
         size, timeline, undated = _timeline([(row.observed_at, row.id) for row in rows])
         lats = [row.latitude for row in rows if row.latitude is not None]
         lons = [row.longitude for row in rows if row.longitude is not None]
-        label = rows[0].location_name or f"Approximate area {key}"
+        exact_precision = {"reported_point", "gps", "exact", "device", "camera_position"}
+        if any(row.precision in exact_precision for row in rows) and lats and lons:
+            label = f"Approximate area {statistics.fmean(lats):.1f},{statistics.fmean(lons):.1f}"
+        else:
+            label = rows[0].location_name or f"Approximate area {key}"
         post_ids = sorted({row.post_id for row in rows if row.post_id})
         narrative_ids = sorted({post_to_narrative[p] for p in post_ids if p in post_to_narrative})
         baseline = [int(row["count"]) for row in timeline[-4:-1]] if len(timeline) >= 4 else []
@@ -457,6 +575,7 @@ def _build_geo(observations: list[GeoObservation], post_to_narrative: dict[str, 
             "key": key,
             "label": label,
             "observation_count": len(rows),
+            "protected_subject_count": len(subjects),
             "post_count": len(post_ids),
             "narrative_ids": narrative_ids,
             "sources": sorted({row.source for row in rows}),
@@ -487,8 +606,55 @@ def _build_geo(observations: list[GeoObservation], post_to_narrative: dict[str, 
         "points": points[:500],
         "locations": locations[:200],
         "anomalies": anomalies,
-        "map_note": "Heat points are aggregated and coordinates rounded to 2 decimals. A source-reported place is not a live device or person location.",
+        "privacy": {
+            "minimum_group_size": minimum_group,
+            "suppressed_groups": suppressed_groups,
+            "suppressed_observations": suppressed_observations,
+            "basis": "Distinct observed accounts; unlinked posts are counted separately.",
+        },
+        "map_note": f"Heat points are aggregated, coordinates rounded to 2 decimals, and groups with fewer than {minimum_group} distinct observed subjects are suppressed. A source-reported place is not a live device or person location.",
     }, anomalies
+
+
+def _evidence_confidence(alert: dict, posts_by_id: dict[str, Post],
+                         accounts: dict[str, Account],
+                         posts_by_account: dict[str, list[Post]]) -> dict:
+    """Transparent completeness score, deliberately not a truth probability."""
+    evidence_ids = [str(value) for value in (alert.get("evidence_ids") or [])]
+    if alert.get("type") == "narrative_acceleration":
+        evidence_posts = [posts_by_id[value] for value in evidence_ids if value in posts_by_id]
+    elif alert.get("type") == "coordination_review":
+        evidence_posts = [post for value in evidence_ids for post in posts_by_account.get(value, [])]
+    else:
+        return {"score": None, "level": "not_applicable",
+                "score_type": "uncalibrated_evidence_completeness_not_truth_probability"}
+    if not evidence_posts:
+        return {"score": None, "level": "insufficient_evidence",
+                "score_type": "uncalibrated_evidence_completeness_not_truth_probability"}
+    platforms = {accounts[post.account_id].platform for post in evidence_posts
+                 if post.account_id in accounts}
+    timestamp_coverage = sum(post.timestamp is not None for post in evidence_posts) / len(evidence_posts)
+    sample_factor = min(len(evidence_posts) / 20, 1)
+    diversity_factor = min(len(platforms) / 2, 1)
+    score = 100 * (0.30 * sample_factor + 0.30 * timestamp_coverage + 0.40 * diversity_factor)
+    if len(platforms) <= 1:
+        score = min(score, 60)
+    score = round(score)
+    return {
+        "score": score,
+        "level": "limited" if score < 40 else "moderate" if score < 70 else "comparatively_stronger",
+        "score_type": "uncalibrated_evidence_completeness_not_truth_probability",
+        "factors": {
+            "visible_evidence_posts": len(evidence_posts),
+            "source_timestamp_coverage": round(timestamp_coverage, 3),
+            "platform_diversity_count": len(platforms),
+        },
+        "formula": "100*(.30*min(posts/20,1)+.30*timestamp_coverage+.40*min(platforms/2,1)); single/no-platform score capped at 60",
+        "limitations": [
+            "Measures visible evidence completeness only; it is not the probability that the alert interpretation is correct.",
+            "Platform diversity is not proof of independent corroboration; access gaps and source bias remain.",
+        ],
+    }
 
 
 def build_analytics(db: Session, case_id: str) -> dict:
@@ -502,7 +668,8 @@ def build_analytics(db: Session, case_id: str) -> dict:
     automation = _automation_indicators(posts, accounts)
     network = _build_network(db, case_id, accounts, posts)
     observations = db.scalars(select(GeoObservation).where(GeoObservation.case_id == case_id)).all()
-    geo, geo_anomalies = _build_geo(observations, post_to_narrative)
+    geo, geo_anomalies = _build_geo(
+        observations, post_to_narrative, {post.id: post.account_id for post in all_posts})
     for narrative in narratives:
         narrative["locations"] = [location["label"] for location in geo["locations"] if narrative["id"] in location["narrative_ids"]]
 
@@ -552,15 +719,24 @@ def build_analytics(db: Session, case_id: str) -> dict:
             "rule": f"{count} source access record(s) have this outcome", "recommended_action": "Resolve access or mark corpus coverage as partial; do not interpret missing data as absence.",
             "limitations": [],
         })
+    posts_by_id = {post.id: post for post in all_posts}
+    posts_by_account: dict[str, list[Post]] = defaultdict(list)
+    for post in all_posts:
+        if post.account_id:
+            posts_by_account[post.account_id].append(post)
+    for alert in alerts:
+        alert["evidence_confidence"] = _evidence_confidence(
+            alert, posts_by_id, accounts, posts_by_account)
     severity_rank = {"high": 4, "elevated": 3, "review": 2, "data_gap": 1}
     alerts.sort(key=lambda alert: (severity_rank.get(alert["severity"], 0), alert.get("attention_score") or 0), reverse=True)
+    alerts = sync_alerts(db, case_id, alerts)
 
     media_count = len(db.scalars(select(MediaAsset).where(MediaAsset.case_id == case_id)).all())
     dated_count = sum(1 for post in all_posts if post.timestamp)
     geo_post_ids = {row.post_id for row in observations if row.post_id}
     reference = max([_dt(post.timestamp) for post in all_posts if post.timestamp] or [None])
     return {
-        "schema_version": "scamurai-analytics-v1",
+        "schema_version": "scamurai-analytics-v2",
         "generated_at": _iso(utcnow()),
         "reference_time": _iso(reference),
         "scope": "Collected case corpus only; analytics are refreshed on request and are not a platform-wide real-time monitor.",
@@ -581,5 +757,110 @@ def build_analytics(db: Session, case_id: str) -> dict:
             "Narrative clusters are lexical candidates; multilingual sarcasm, code-switching and short texts need human review.",
             "Earliest observed is not first uploader; graph degree is not audience influence; source-reported geo is not live location.",
             "Organic discourse and coordinated campaigns can share the same surface features. Corroboration and reviewer decisions remain mandatory.",
+        ],
+    }
+
+
+def build_account_detail(db: Session, case_id: str, account_id: str) -> dict | None:
+    account = db.scalar(select(Account).where(Account.case_id == case_id, Account.id == account_id))
+    if account is None:
+        return None
+    account_rows = db.scalars(select(Account).where(Account.case_id == case_id)).all()
+    accounts = {row.id: row for row in account_rows}
+    all_posts = db.scalars(select(Post).where(Post.case_id == case_id)).all()
+    ordered = sorted(all_posts, key=lambda post: (
+        _dt(post.timestamp) or _dt(post.created_at) or datetime.min.replace(tzinfo=timezone.utc)))
+    analysis_posts = ordered[-MAX_CLUSTER_POSTS:]
+    own_posts = [post for post in ordered if post.account_id == account_id]
+    behavior = next((row for row in _automation_indicators(analysis_posts, accounts)
+                     if row["account_id"] == account_id), None)
+    network = next((row for row in _build_network(db, case_id, accounts, analysis_posts)["nodes"]
+                    if row["account_id"] == account_id), None)
+
+    url_accounts: dict[str, set[str]] = defaultdict(set)
+    for post in all_posts:
+        if post.canonical_url and post.account_id:
+            url_accounts[post.canonical_url].add(post.account_id)
+    shared_urls = []
+    for url, publishers in sorted(url_accounts.items()):
+        if account_id in publishers and len(publishers) > 1:
+            shared_urls.append({
+                "url": url,
+                "observed_account_count": len(publishers),
+                "other_handles": sorted(accounts[value].handle for value in publishers
+                                        if value != account_id and value in accounts),
+                "note": "Exact shared source URL only; not evidence of common control.",
+            })
+
+    candidates = []
+    for candidate in db.scalars(select(CoordinationCandidate).where(
+            CoordinationCandidate.case_id == case_id)).all():
+        if account_id not in json.loads(candidate.account_ids):
+            continue
+        candidates.append({
+            "id": candidate.id,
+            "review_state": candidate.review_state,
+            "episodes": json.loads(candidate.episodes),
+            "features": json.loads(candidate.features),
+            "baseline": candidate.baseline,
+            "alternatives": json.loads(candidate.alternatives),
+            "created_at": _iso(candidate.created_at),
+        })
+
+    seen = [_dt(post.first_seen_at or post.created_at) for post in own_posts]
+    collected = [_dt(post.collected_at or post.created_at) for post in own_posts]
+    source_times = [_dt(post.timestamp) for post in own_posts if post.timestamp]
+    returned = list(reversed(own_posts[-200:]))
+    return {
+        "account": {
+            "id": account.id,
+            "platform": account.platform,
+            "platform_id": account.platform_id,
+            "handle": account.handle,
+            "display_name": account.display_name,
+            "canonical_profile_url": account.canonical_profile_url,
+            "observed_handles": json.loads(account.observed_handles),
+            "identity_confirmed": account.identity_confirmed,
+            "created_at": _iso(account.created_at),
+        },
+        "summary": {
+            "post_count": len(own_posts),
+            "timestamped_post_count": len(source_times),
+            "language_counts": dict(Counter(post.language for post in own_posts)),
+            "domain_counts": dict(Counter(urlparse(post.canonical_url).hostname or "unknown"
+                                               for post in own_posts if post.canonical_url)),
+            "first_source_timestamp": _iso(min(source_times)) if source_times else None,
+            "last_source_timestamp": _iso(max(source_times)) if source_times else None,
+            "first_seen_at": _iso(min(seen)) if seen else None,
+            "last_collected_at": _iso(max(collected)) if collected else None,
+            "shared_url_count": len(shared_urls),
+        },
+        "behavior": behavior,
+        "network": network,
+        "shared_urls": shared_urls[:50],
+        "coordination_candidates": candidates,
+        "posts": [{
+            "id": post.id,
+            "source_id": post.source_id,
+            "text": post.raw_text,
+            "url": post.canonical_url,
+            "language": post.language,
+            "source_timestamp": _iso(post.timestamp),
+            "timestamp_precision": post.timestamp_precision,
+            "first_seen_at": _iso(post.first_seen_at or post.created_at),
+            "collected_at": _iso(post.collected_at or post.created_at),
+            "collection_status": post.collection_status,
+        } for post in returned],
+        "coverage": {
+            "posts_returned": len(returned),
+            "posts_total": len(own_posts),
+            "truncated": len(own_posts) > len(returned),
+            "analysis_post_cap": MAX_CLUSTER_POSTS,
+            "case_posts": len(all_posts),
+        },
+        "limitations": [
+            "Earliest observed and collection times describe this case corpus, not platform-wide origin or full account history.",
+            "Shared URLs, timing and graph centrality do not establish common ownership, coordination or automation.",
+            "Only public/source-supplied account metadata is shown; no private account access or person-level tracking is performed.",
         ],
     }
