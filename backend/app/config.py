@@ -11,26 +11,11 @@ import os
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic_settings import BaseSettings, DotEnvSettingsSource, SettingsConfigDict
-
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="SCAMURAI_", env_file=".env", extra="ignore")
-
-    @classmethod
-    def settings_customise_sources(
-        cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
-    ):
-        # Keep existing PS03_ .env deployments working while SCAMURAI_ remains canonical.
-        # Source order gives native settings and SCAMURAI_ values higher precedence.
-        legacy_dotenv = DotEnvSettingsSource(
-            settings_cls,
-            env_file=dotenv_settings.env_file,
-            env_file_encoding=dotenv_settings.env_file_encoding,
-            env_prefix="PS03_",
-        )
-        return init_settings, env_settings, dotenv_settings, legacy_dotenv, file_secret_settings
 
     environment: str = "development"
     database_url: str = "sqlite:///./scamurai_dev.db"

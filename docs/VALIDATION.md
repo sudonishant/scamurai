@@ -8,7 +8,7 @@ This is a point-in-time implementation/connectivity record, not an accuracy benc
 |---|---|
 | `cd backend && python -m pytest tests/ -q` | **58 passed**; six upstream/deprecation warnings |
 | `cd frontend && npm ci && npm run build` | TypeScript and Vite 8 production build passed |
-| `cd frontend && npm run test:e2e` | **4 passed** in Chromium |
+| `cd frontend && npm run test:e2e` | **5 passed** in Chromium |
 | `cd frontend && npm audit --audit-level=moderate` | **0 known vulnerabilities** |
 
 The browser tests:
@@ -16,7 +16,8 @@ The browser tests:
 1. Create their own case and six-post synthetic validation import through the live API; verify narrative, map, network, media and all 11 API/access rows render API-derived data without runtime errors.
 2. Verify there is no demo control, paste a full `Bearer …` token to test normalization, accept a real API-backed finding, and verify its review state refreshes.
 3. Use a 390×844 viewport; verify no page-level horizontal overflow and open the geospatial view.
-4. Abort the live cases request; verify a visible transport error and that neither an investigation nor synthetic/demo evidence is substituted.
+4. Configure a mocked remote HTTPS API before login; reject an invalid URL scheme, verify CORS/token behavior, and confirm a 401 clears authentication without losing the backend connection.
+5. Abort the live cases request; verify a visible transport error and that neither an investigation nor synthetic/demo evidence is substituted.
 
 The browser suite needs FastAPI on `:8000` and Vite on `:5173`; it does not need an external provider or pre-seeded case. It creates development data in the configured development database.
 

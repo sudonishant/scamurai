@@ -20,7 +20,7 @@ Scamurai must not present a mock as collected evidence. Connector capabilities a
 | LLM planning/summarization | Adapters for Groq/OpenRouter/Gemini; deterministic local rules by default | Provider content is untrusted data; failures are typed, never replaced with invented analysis |
 | Celery/Redis, PostgreSQL, S3/MinIO | Compose/worker contracts plus local in-process/SQLite/disk development path | Local development behavior is not represented as durable production infrastructure |
 
-`SCAMURAI_` is the canonical environment prefix. Existing `PS03_` shell variables and `.env` entries remain supported; canonical values take precedence.
+All runtime environment settings use the `SCAMURAI_` prefix.
 
 ## Outcome vocabulary
 

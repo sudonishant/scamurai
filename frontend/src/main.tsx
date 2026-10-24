@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import Icon from "./components/Icon";
 import MatrixBackdrop from "./components/MatrixBackdrop";
-import { api, ApiError, clearSession, getToken, setToken, UNAUTHORIZED_EVENT } from "./lib/api";
+import { api, ApiError, clearSession, getApiUrl, getToken, setApiUrl, setToken, UNAUTHORIZED_EVENT } from "./lib/api";
 import "@fontsource/jetbrains-mono/latin-400.css";
 import "@fontsource/jetbrains-mono/latin-500.css";
 import "@fontsource/jetbrains-mono/latin-600.css";
@@ -19,8 +19,22 @@ const ROLES = [
 
 function Login({ onAuth }: { onAuth: () => void }) {
   const [token, setTok] = useState("");
+  const [apiUrl, setApiUrlInput] = useState(getApiUrl());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [connectionNote, setConnectionNote] = useState("");
+
+  function saveConnection(value: string) {
+    try {
+      const clean = setApiUrl(value);
+      setApiUrlInput(clean);
+      setConnectionNote(clean ? `Live API saved: ${clean}` : "Same-origin live API selected.");
+      setError("");
+    } catch (e) {
+      setConnectionNote("");
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
 
   async function enterLive(value: string) {
     if (!value.trim()) { setError("Paste a token or choose a development role below."); return; }
@@ -30,6 +44,7 @@ function Login({ onAuth }: { onAuth: () => void }) {
       await api.listCases();
       onAuth();
     } catch (e) {
+      clearSession(); // failed sign-in must not leave an unvalidated token behind
       setError(e instanceof ApiError ? e.message : String(e));
     } finally { setBusy(false); }
   }
@@ -48,8 +63,21 @@ function Login({ onAuth }: { onAuth: () => void }) {
           <p>Collect real public evidence. Connect narratives, accounts and infrastructure. Keep every source, limitation and review decision visible.</p>
           <div className="auth-card">
             <div className="auth-card-head"><div><h2>Sign in</h2><p>Access your live OSINT environment</p></div></div>
+            <details className="login-api-config">
+              <summary><span><Icon name="settings" size={14} /> Live API connection</span><b>{apiUrl ? "REMOTE" : "SAME ORIGIN"}</b></summary>
+              <div className="login-api-body">
+                <label className="field-label" htmlFor="api-url">FastAPI base URL</label>
+                <input id="api-url" value={apiUrl} onChange={(e) => setApiUrlInput(e.target.value)} placeholder="https://api.your-domain.org" autoComplete="url" spellCheck={false} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); saveConnection(apiUrl); } }} />
+                <small className="field-help">Leave blank for same-origin development. On GitHub Pages or another static host, configure a separately deployed HTTPS FastAPI backend and allow this UI origin in backend CORS.</small>
+                <div className="login-api-actions">
+                  <button type="button" className="btn btn-secondary btn-small" onClick={() => saveConnection(apiUrl)}>Save connection</button>
+                  <button type="button" className="text-button" onClick={() => saveConnection("")}>Use same-origin</button>
+                </div>
+              </div>
+            </details>
+            {connectionNote && <div className="inline-alert success"><Icon name="check" /><span>{connectionNote}</span></div>}
             <label className="field-label" htmlFor="token">Bearer token</label>
-            <input id="token" value={token} onChange={(e) => setTok(e.target.value)} placeholder="dev-token-owner" autoComplete="off" spellCheck={false} aria-describedby="token-help" onKeyDown={(e) => { if (e.key === "Enter") enterLive(token); }} />
+            <input id="token" type="password" value={token} onChange={(e) => setTok(e.target.value)} placeholder="dev-token-owner" autoComplete="off" spellCheck={false} aria-describedby="token-help" onKeyDown={(e) => { if (e.key === "Enter") enterLive(token); }} />
             <small id="token-help" className="field-help">Paste the token only, or paste “Bearer …”—the client normalizes it for you.</small>
             <button className="btn btn-primary btn-full" disabled={busy} onClick={() => enterLive(token)}>
               {busy ? <span className="spinner" /> : <Icon name="arrow" />} {busy ? "Connecting…" : "Open live workspace"}

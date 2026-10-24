@@ -140,7 +140,7 @@ Authorized JSON/CSV import in cases me available reh sakta hai, lekin wo live pl
 
 1. Repository root ki `.env.example` ko `.env` me copy karke backend environment configure karo. `.env` ko
    commit mat karo.
-2. `SCAMURAI_` canonical prefix hai. Purane `PS03_` names supported hain; dono ho to canonical value wins.
+2. Saare runtime settings `SCAMURAI_` prefix use karte hain.
 3. Key sirf backend process ke paas rehti hai; browser bundle, prompts, exports aur logs me nahi daalo.
 4. Backend restart karke **Connectors → Source health** me non-secret configured state verify karo.
 5. Key kabhi chat/ticket/screenshot me share mat karo. Expose ho jaye to provider dashboard se rotate/revoke karo.
