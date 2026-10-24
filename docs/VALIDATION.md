@@ -20,7 +20,7 @@ This is a point-in-time implementation/connectivity record, not an accuracy cert
 | Existing fixture evaluation | Completed; expected image categories observed, 5/5 comment fixture labels present, negative-control states retained |
 | Multilingual diagnostic | Executed; 14 synthetic pairs, limitations retained below |
 | Experiment notebook validation | Valid nbformat JSON, 7 cells, all code compiles, no saved outputs |
-| Real Compose/PostgreSQL/MinIO/Celery runtime | CI smoke implemented; **not run locally because Docker is unavailable** |
+| Real Compose/PostgreSQL/MinIO/Celery runtime | **Passed** in [GitHub Actions run 40126606582](https://github.com/sudonishant/scamurai/actions/runs/40126606582): PostgreSQL migration, MinIO bootstrap, S3 write/readback and Celery completion; not run locally because Docker is unavailable |
 
 The Playwright checks:
 
@@ -41,7 +41,20 @@ Automated accessibility scans do not replace manual keyboard, screen-reader, zoo
 
 Before the new deployment, live no-cache checks found the portfolio root `/` at 200, `/scamurai` at 301, `/scamurai/` and its query-based deep links/assets at 200, but **`/scamurai/alerts` at 404 with the GitHub Pages not-found HTML**. This is a path-style deep-link hosting issue, not a missing backend or evidence fallback.
 
-The build now includes `frontend/public/404.html`. Production-emulation tests pass for nested case/alert, account and post recovery, existing-query preservation, assets and unknown-route handling. CI also requires the `404.html` artifact. **Live fixed-route verification is pending the new push/Pages deployment and is not claimed here.**
+The build includes `frontend/public/404.html`. Production-emulation tests pass for nested case/alert, account and post recovery, existing-query preservation, assets and unknown-route handling. CI also requires the `404.html` artifact.
+
+[GitHub Actions run 40126606582](https://github.com/sudonishant/scamurai/actions/runs/40126606582) passed all validation, real Compose smoke and Pages deployment jobs. Post-deployment no-cache HTTP checks observed the new `Route recovery · Scamurai` fallback, and real Chromium checks measured:
+
+| Live route | Measured result |
+|---|---|
+| `/scamurai/alerts` | Recovered to `/scamurai/?tab=alerts` |
+| `/scamurai/cases/case-123/alerts/alert-456` | Recovered with `case=case-123`, `tab=alerts` and `alert=alert-456` |
+| `/scamurai/accounts/account-123?purpose=review` | Preserved `purpose=review`; recovered account/tab parameters |
+| `/scamurai/posts/post-123` | Recovered to Narratives with `post=post-123` |
+| `/scamurai/evidence/evidence-123` | Recovered to Graph with `evidence=evidence-123` |
+| `/scamurai/not-a-real-route` | Honest branded 404, safe `/scamurai/` link, no substituted investigation data |
+
+Every recovered route loaded its production JS/CSS assets successfully and produced zero browser runtime errors. The separate portfolio `/` remained HTTP 200. GitHub Pages intentionally serves the custom fallback with HTTP 404 before JavaScript recovery; raw HTTP clients do not execute that redirect, so success was measured in Chromium rather than inferred from the fallback status.
 
 ## Migration and preview-data verification
 
@@ -110,7 +123,6 @@ This verifies the required honest no-model state rather than a fabricated deepfa
 
 ## Operational boundaries still requiring deployment validation
 
-- The real Compose smoke must pass in GitHub Actions before the new Pages deployment. Local Docker execution was not available.
 - Production OIDC verification is implemented and tested with signed tokens, but no live external IdP soak test is claimed.
 - The browser accepts bearer access tokens; interactive OIDC Authorization Code + PKCE/refresh-token/session flow is not implemented.
 - Celery/S3 contracts have unit regressions and a concrete real-stack smoke; production broker/worker loss, S3 policy and load behavior still require environment-specific testing.
