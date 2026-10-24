@@ -8,7 +8,7 @@ This is the file-level index for the roadmap implementation. The repository sour
 |---|---|
 | `.env.example` | Documents local/S3 storage, OIDC/JWKS, dev-auth enforcement and aggregate-geo threshold settings without secrets. |
 | `docker-compose.yml` | Adds runnable PostgreSQL, Redis, MinIO, migration, API, Celery worker and frontend topology with health dependencies and service-specific migration/API/worker healthchecks; uses digest-pinned public Chainguard MinIO server/client builds after upstream image withdrawal. |
-| `backend/Dockerfile` | Uses runtime requirements, non-root execution and the production API entrypoint. |
+| `backend/Dockerfile` | Uses runtime requirements, non-root execution and the production API entrypoint; creates the same `/var/storage` local default used inside the image with non-root ownership. |
 | `frontend/Dockerfile` | Uses strict locked installation before the static build. |
 | `backend/requirements.txt` | Declares Alembic, PostgreSQL, Redis/Celery, Boto3, JWT/cryptography and the SciPy runtime required by NetworkX PageRank; no reliance on incidental local packages. |
 | `backend/requirements-dev.txt` | Separates pytest, Bandit and pip-audit development/security tooling. |
@@ -19,7 +19,7 @@ This is the file-level index for the roadmap implementation. The repository sour
 
 | File | Exact change |
 |---|---|
-| `backend/app/config.py` | Adds fail-closed production/dev-auth validation, OIDC settings, S3 configuration and minimum geo group-size validation. |
+| `backend/app/config.py` | Adds fail-closed production/dev-auth validation, OIDC settings, S3 configuration and minimum geo group-size validation; S3/endpoint-only storage no longer creates or requires a local directory. |
 | `backend/app/security.py` | Implements verified OIDC issuer/audience/signature/expiry/required-claim handling, pre-provisioned identity mapping, cached JWKS clients and production-safe user behavior while retaining RBAC/SSRF defenses. |
 | `backend/app/main.py` | Adds production startup guards, new routers and non-secret infrastructure/auth health reporting. |
 | `backend/app/models.py` | Adds external identity fields, persistent alerts/review fields and post/account provenance timestamps. |
@@ -80,6 +80,7 @@ This is the file-level index for the roadmap implementation. The repository sour
 |---|---|
 | `backend/tests/test_investigation_operations.py` | Covers production auth fail-closed behavior, signed OIDC claims/provisioning/JWKS reuse, Celery dispatch, S3 bytes, persistent alert review, geo privacy, provenance and upload replay. |
 | `backend/tests/test_multilingual_evaluation.py` | Locks Devanagari mark preservation/tokenization and the diagnostic's honest no-semantic-model contract. |
+| `backend/tests/test_security.py` | Adds the S3/local configuration regression: remote object storage has no local-directory side effect, while local storage still initializes its directory. |
 | `backend/fixtures/multilingual_narratives.json` | Adds 14 explicitly synthetic same-language, cross-lingual and different-narrative control pairs. |
 | `backend/scripts/evaluate_multilingual.py` | Computes reproducible lexical pair metrics by track, retains false candidates and labels semantic scores unavailable rather than zero. |
 | `backend/scripts/compose_smoke.py` | Verifies real disposable Compose health, MinIO snapshot/media upload and byte-for-byte readback, persisted no-model forensics and Celery completion. |

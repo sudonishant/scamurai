@@ -13,7 +13,7 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY --chown=scamurai:scamurai . .
-RUN mkdir -p /data/storage && chown -R scamurai:scamurai /data
+RUN mkdir -p /var/storage && chown -R scamurai:scamurai /var/storage
 USER scamurai
 
 EXPOSE 8000

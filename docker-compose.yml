@@ -62,11 +62,16 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-scamurai-minio-password}
       SCAMURAI_S3_BUCKET: ${SCAMURAI_S3_BUCKET:-scamurai-private}
       MC_CONFIG_DIR: /tmp/scamurai-mc
-    entrypoint: ["/bin/sh", "-c"]
-    command: >-
-      until mc alias set local http://minio:9000 \"$${MINIO_ROOT_USER}\" \"$${MINIO_ROOT_PASSWORD}\"; do sleep 2; done;
-      mc mb --ignore-existing \"local/$${SCAMURAI_S3_BUCKET}\";
-      mc anonymous set none \"local/$${SCAMURAI_S3_BUCKET}\"
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        until /usr/bin/mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}" && /usr/bin/mc ready local; do
+          sleep 2
+        done
+        /usr/bin/mc mb --ignore-existing "local/$${SCAMURAI_S3_BUCKET}"
+        /usr/bin/mc anonymous set none "local/$${SCAMURAI_S3_BUCKET}"
 
   migrate:
     build: ./backend

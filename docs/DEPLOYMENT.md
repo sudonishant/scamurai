@@ -42,7 +42,7 @@ docker compose logs migration api worker
 # UI: http://localhost:5173 ; API: http://localhost:8000
 ```
 
-The migration job runs before either service starts. The API image healthcheck is liveness only; `/health` reports configured auth/runner/storage modes. The worker overrides that inherited check with Celery `inspect ping`. Actual MinIO write/read and Celery completion are proven by the disposable smoke below, not inferred from liveness.
+The migration job runs before either service starts. S3 mode does not create or require a local storage directory; the non-root image prepares `/var/storage` only for the local-storage configuration. The API image healthcheck is liveness only; `/health` reports configured auth/runner/storage modes. The worker overrides that inherited check with Celery `inspect ping`. Actual MinIO write/read and Celery completion are proven by the disposable smoke below, not inferred from liveness.
 
 To stop without deleting data:
 

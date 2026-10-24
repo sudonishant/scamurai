@@ -6,7 +6,7 @@ This is a point-in-time implementation/connectivity record, not an accuracy cert
 
 | Check | Result |
 |---|---|
-| `cd backend && python -m pytest tests/ -q` | **67 passed**; six upstream/deprecation warnings |
+| `cd backend && python -m pytest tests/ -q` | **68 passed**; six upstream/deprecation warnings |
 | Fresh Alembic upgrade + `alembic check` | Passed; model and migration head agree |
 | Disposable `0002 → 0001 → 0002` | Passed |
 | Disposable `head → base → head` + `alembic check` | Passed |

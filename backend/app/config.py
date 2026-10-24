@@ -118,5 +118,8 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     settings = Settings()
-    os.makedirs(settings.storage_dir, exist_ok=True)
+    # Remote object storage must not require or mutate a local filesystem.
+    # Preserve the legacy endpoint-only S3 configuration in the same way.
+    if settings.storage_backend == "local" and not settings.s3_endpoint:
+        os.makedirs(settings.storage_dir, exist_ok=True)
     return settings

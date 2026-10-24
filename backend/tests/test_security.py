@@ -115,3 +115,28 @@ def test_connector_status_is_honest(client, auth, make_case):
                     json={"url": "https://www.instagram.com/p/DEMO123/"})
     assert r.status_code == 201
     assert r.json()["source_access"][0]["outcome"] == "not_configured"
+
+
+def test_s3_config_does_not_create_local_storage(tmp_path, monkeypatch):
+    from app.config import get_settings
+
+    storage_dir = tmp_path / "unused-local-storage"
+    try:
+        with monkeypatch.context() as env:
+            env.setenv("SCAMURAI_STORAGE_BACKEND", "s3")
+            env.setenv("SCAMURAI_STORAGE_DIR", str(storage_dir))
+            env.setenv("SCAMURAI_S3_BUCKET", "scamurai-test-private")
+            env.delenv("SCAMURAI_S3_ENDPOINT", raising=False)
+            get_settings.cache_clear()
+            assert get_settings().storage_backend == "s3"
+            assert not storage_dir.exists()
+
+            env.setenv("SCAMURAI_STORAGE_BACKEND", "local")
+            get_settings.cache_clear()
+            assert get_settings().storage_backend == "local"
+            assert storage_dir.is_dir()
+    finally:
+        # The context has restored the isolated test environment before this
+        # cached settings instance is recreated for any subsequent tests.
+        get_settings.cache_clear()
+        get_settings()
