@@ -1,4 +1,4 @@
-"""Alembic environment — database URL comes from PS03 settings, never hard-coded."""
+"""Alembic environment — database URL comes from Scamurai settings, never hard-coded."""
 from __future__ import annotations
 
 from logging.config import fileConfig

@@ -17,7 +17,7 @@ FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 
 @pytest.fixture()
 def populated_case(client, auth, make_case, upload_file, image_dir):
-    case_id = make_case(members={"reviewer@ps03.local": "reviewer", "viewer@ps03.local": "viewer"})
+    case_id = make_case(members={"reviewer@scamurai.local": "reviewer", "viewer@scamurai.local": "viewer"})
     for name in ("scene_a.png", "scene_a_renamed.png", "scene_a_recompressed.jpg",
                  "scene_a_crop.png", "scene_b_same_size.jpg", "scene_unrelated.png",
                  "image_with_gps.jpg", "cultural_hall.png"):

@@ -2,7 +2,7 @@
 
 PostgreSQL is the production target from the master prompt; SQLite keeps the
 smallest runnable milestone working without infrastructure. Switch with
-PS03_DATABASE_URL=postgresql+psycopg://user:pass@db/ps03.
+SCAMURAI_DATABASE_URL=postgresql+psycopg://user:pass@db/scamurai.
 """
 from __future__ import annotations
 

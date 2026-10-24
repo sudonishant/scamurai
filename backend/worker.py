@@ -1,7 +1,7 @@
 """Optional Celery worker.
 
 The default local build uses an in-process ThreadPoolExecutor (see
-services/jobs.py). When PS03_REDIS_URL is configured, this module exposes the
+services/jobs.py). When SCAMURAI_REDIS_URL is configured, this module exposes the
 same task contracts on a durable Celery broker. Job state always stays in the
 relational store; broker persistence is not exactly-once, so every task is
 idempotent and crash-reconciliation runs on startup.
@@ -37,12 +37,12 @@ if Celery and settings.redis_url:
         # Closure binding per task name; each task reuses the safe runner with
         # checkpointing, cancellation and idempotent writes.
         def _make(fn):
-            @celery_app.task(name=f"ps03.{fn.__name__}", bind=True, max_retries=3)
+            @celery_app.task(name=f"scamurai.{fn.__name__}", bind=True, max_retries=3)
             def _task(self, job_id: str):
                 _run_safely(job_id, fn)
             return _task
         globals()[f"task_{_name}"] = _make(_fn)
 else:
     celery_app = None  # type: ignore[assignment]
-    if not os.environ.get("PS03_SUPPRESS_WORKER_NOTICE"):
+    if not os.environ.get("SCAMURAI_SUPPRESS_WORKER_NOTICE"):
         print("[worker] Celery/Redis not configured — using in-process job runner.")

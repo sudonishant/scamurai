@@ -34,7 +34,7 @@ def test_youtube_import_not_configured_is_honest_502(client, auth, make_case, mo
     case_id = make_case()
 
     def boom(*a, **kw):
-        raise YouTubeError("not_configured", "PS03_YOUTUBE_API_KEY is not set")
+        raise YouTubeError("not_configured", "SCAMURAI_YOUTUBE_API_KEY is not set")
 
     monkeypatch.setattr(connectors_router.yt_provider, "fetch_youtube_comments", boom)
     r = client.post(f"/api/v1/cases/{case_id}/connectors/youtube/import",
@@ -69,14 +69,14 @@ def test_youtube_import_creates_comments(client, auth, make_case, monkeypatch):
 
 
 def test_youtube_import_requires_analyst_role(client, auth, make_case):
-    case_id = make_case(members={"viewer@ps03.local": "viewer"})
+    case_id = make_case(members={"viewer@scamurai.local": "viewer"})
     r = client.post(f"/api/v1/cases/{case_id}/connectors/youtube/import",
                     headers=auth("viewer"), json={"url": "abc12345678"})
     assert r.status_code == 403
 
 
 def test_factcheck_search_success_and_empty_semantics(client, auth, make_case, monkeypatch):
-    case_id = make_case(members={"analyst@ps03.local": "analyst"})
+    case_id = make_case(members={"analyst@scamurai.local": "analyst"})
     monkeypatch.setattr(connectors_router.fc_provider, "search_factchecks",
                         lambda *a, **kw: [{"claim": "x", "outcome": "False", "source": "boimerna"}])
     r = client.post(f"/api/v1/cases/{case_id}/connectors/factcheck/search",

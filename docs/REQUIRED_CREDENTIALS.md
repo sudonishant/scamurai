@@ -18,10 +18,10 @@ agent, exports). Keys sirf **live provider** features on karti hain. Key na ho t
   2. Left menu → **API Keys → Create API Key** → key copy kar lo (`gsk_...` se start hoti hai).
 - **`.env` me daalo:**
   ```
-  PS03_LLM_PROVIDER=groq
-  PS03_LLM_API_KEY=gsk_...yahan...
-  PS03_LLM_BASE_URL=https://api.groq.com/openai/v1
-  PS03_LLM_MODEL_ID=gpt-oss-20b
+  SCAMURAI_LLM_PROVIDER=groq
+  SCAMURAI_LLM_API_KEY=gsk_...yahan...
+  SCAMURAI_LLM_BASE_URL=https://api.groq.com/openai/v1
+  SCAMURAI_LLM_MODEL_ID=gpt-oss-20b
   ```
 
 ### Option B — Google Gemini AI Studio (free, ek caveat)
@@ -32,9 +32,9 @@ agent, exports). Keys sirf **live provider** features on karti hain. Key na ho t
 - **Kaise:** https://aistudio.google.com → **Get API key** → `AIza...` key.
 - **`.env` me daalo:**
   ```
-  PS03_LLM_PROVIDER=gemini
-  PS03_GEMINI_API_KEY=AIza...yahan...
-  PS03_LLM_MODEL_ID=gemini-flash
+  SCAMURAI_LLM_PROVIDER=gemini
+  SCAMURAI_GEMINI_API_KEY=AIza...yahan...
+  SCAMURAI_LLM_MODEL_ID=gemini-flash
   ```
 
 ### Option C — OpenRouter (ek key, bahut saare free models)
@@ -43,10 +43,10 @@ agent, exports). Keys sirf **live provider** features on karti hain. Key na ho t
 - **Kaise:** https://openrouter.ai → sign up → **Keys → Create Key**.
 - **`.env` me daalo:**
   ```
-  PS03_LLM_PROVIDER=openrouter
-  PS03_LLM_API_KEY=sk-or-...
-  PS03_LLM_BASE_URL=https://openrouter.ai/api/v1
-  PS03_LLM_MODEL_ID=deepseek/deepseek-chat-v3.1:free
+  SCAMURAI_LLM_PROVIDER=openrouter
+  SCAMURAI_LLM_API_KEY=sk-or-...
+  SCAMURAI_LLM_BASE_URL=https://openrouter.ai/api/v1
+  SCAMURAI_LLM_MODEL_ID=deepseek/deepseek-chat-v3.1:free
   ```
 
 > Safety by design: koi bhi LLM call me analyzed material hamesha **data** ke roop me jaata hai,
@@ -59,11 +59,11 @@ agent, exports). Keys sirf **live provider** features on karti hain. Key na ho t
 - **Kya milta hai:** kisi bhi public video ke comments + replies, official Data API v3 se.
   Quota 10,000 units/day; ek comment page = sirf 1 unit (100 comments/page). OAuth nahi chahiye.
 - **Kaise:**
-  1. https://console.cloud.google.com → naya project banao (e.g. "ps03").
+  1. https://console.cloud.google.com → naya project banao (e.g. "scamurai").
   2. **APIs & Services → Enable APIs and Services → "YouTube Data API v3" → Enable.**
   3. **Credentials → Create Credentials → API key** → key copy karo.
   4. (Recommended) key pe **Edit → API restrictions → YouTube Data API v3** select kar do.
-- **`.env` me daalo:** `PS03_YOUTUBE_API_KEY=AIza...`
+- **`.env` me daalo:** `SCAMURAI_YOUTUBE_API_KEY=AIza...`
 - UI: case kholo → **Connectors tab → YouTube comments import**. Video URL ya 11-char ID do.
   Comments disabled / quota khatam hone par system honestly `permission_denied` / `rate_limited`
   record karta hai — chup-chaap khaali result nahi dikhata.
@@ -73,7 +73,7 @@ agent, exports). Keys sirf **live provider** features on karti hain. Key na ho t
   saath. Result na milna = "koi published fact-check nahi", ye kabhi proof nahi ki claim jhooth hai.
 - **Kaise:** same Google Cloud project → **Enable "Fact Check Tools API"** → ek nayi API key banao
   ya upar wali key me dono APIs allow kar do.
-- **`.env` me daalo:** `PS03_GOOGLE_FACTCHECK_API_KEY=AIza...`
+- **`.env` me daalo:** `SCAMURAI_GOOGLE_FACTCHECK_API_KEY=AIza...`
 - UI: Connectors tab → **Fact Check search**.
 
 ## 4. Instagram (Meta Graph API) — free, par conditions hain
@@ -93,7 +93,7 @@ agent, exports). Keys sirf **live provider** features on karti hain. Key na ho t
   100 queries/min. Unauthenticated access May 2026 se poori tarah blocked.
 - **Kaise (agar phir bhi chahiye):** https://www.reddit.com/prefs/apps → **are you a developer?
   create an app… → script type** → client ID + secret + descriptive User-Agent.
-- **`.env`:** `PS03_REDDIT_CLIENT_ID`, `PS03_REDDIT_CLIENT_SECRET`, `PS03_REDDIT_USER_AGENT`.
+- **`.env`:** `SCAMURAI_REDDIT_CLIENT_ID`, `SCAMURAI_REDDIT_CLIENT_SECRET`, `SCAMURAI_REDDIT_USER_AGENT`.
 - Mera recommendation: Reddit ko primary source mat banao; CSV/JSON import se kaam chal jayega.
 
 ---
@@ -108,7 +108,7 @@ agent, exports). Keys sirf **live provider** features on karti hain. Key na ho t
 Bas itne se platform ke saare free live features chalu ho jayenge. Instagram/Reddit optional hain.
 
 ## Key kaise lagti hai (security)
-- Saari keys `/home/user/ps03/.env` me jaati hain (file `.gitignore` me hai — git me kabhi commit
+- Saari keys `/home/user/scamurai/.env` me jaati hain (file `.gitignore` me hai — git me kabhi commit
   nahi hogi, GitHub repo me nahi jayegi).
 - Key sirf backend process ke paas rehti hai; frontend kabhi usse touch nahi karta.
 - Backend restart (`make run-api`) ke baad Connectors tab me status `configured` dikhega.

@@ -166,30 +166,30 @@ docker compose up --build
 ```
 
 The SQLite/in-process path exists so the smallest runnable milestone needs no
-infrastructure; switch via `PS03_DATABASE_URL` and `PS03_REDIS_URL`.
+infrastructure; switch via `SCAMURAI_DATABASE_URL` and `SCAMURAI_REDIS_URL`.
 
 ---
 
 ## Configuration
 
-All settings are env-driven, `PS03_`-prefixed, and read by `backend/app/config.py`
+All settings are env-driven, `SCAMURAI_`-prefixed, and read by `backend/app/config.py`
 (pydantic-settings). Copy `.env.example` → `.env` (gitignored — **secrets never enter the
 repo, logs, exports or browser bundles**).
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `PS03_DATABASE_URL` | SQLite locally; `postgresql+psycopg://…` in Docker | `sqlite:///./ps03_dev.db` |
-| `PS03_STORAGE_DIR` / `PS03_S3_*` | Local disk or S3/MinIO object storage | `./var/storage` |
-| `PS03_REDIS_URL` | Enables the Celery worker path when set | empty (in-process jobs) |
-| `PS03_MAX_SEED_URLS`, `PS03_MAX_DEPTH`, `PS03_MAX_NEW_ENTITIES`, `PS03_RUN_DEADLINE_SECONDS` | Section-4 prototype guardrails (server-clamped) | 5 / 2 / 200 / 600 |
-| `PS03_PHASH_DISTANCE_THRESHOLD`, `PS03_PIXEL_CORRELATION_THRESHOLD`, `PS03_NEAR_DUPLICATE_RATIO` | Image/coordination tuning | 5 / 0.82 / 0.88 |
-| `PS03_JWT_SECRET`, `PS03_CORS_ORIGINS`, `PS03_EXPORT_LINK_TTL_SECONDS` | Security | change-me / localhost / 3600 |
-| `PS03_LLM_PROVIDER` | `groq` · `openrouter` · `gemini` | empty (deterministic rules only) |
-| `PS03_LLM_API_KEY`, `PS03_LLM_BASE_URL`, `PS03_LLM_MODEL_ID` | OpenAI-compatible LLM route | empty |
-| `PS03_GEMINI_API_KEY` | Native Gemini route | empty |
-| `PS03_YOUTUBE_API_KEY` | Live YouTube commentThreads import | empty |
-| `PS03_GOOGLE_FACTCHECK_API_KEY` | Live Claim Search | empty |
-| `PS03_REDDIT_CLIENT_ID/SECRET/USER_AGENT` | Approval-gated Reddit OAuth | empty |
+| `SCAMURAI_DATABASE_URL` | SQLite locally; `postgresql+psycopg://…` in Docker | `sqlite:///./scamurai_dev.db` |
+| `SCAMURAI_STORAGE_DIR` / `SCAMURAI_S3_*` | Local disk or S3/MinIO object storage | `./var/storage` |
+| `SCAMURAI_REDIS_URL` | Enables the Celery worker path when set | empty (in-process jobs) |
+| `SCAMURAI_MAX_SEED_URLS`, `SCAMURAI_MAX_DEPTH`, `SCAMURAI_MAX_NEW_ENTITIES`, `SCAMURAI_RUN_DEADLINE_SECONDS` | Section-4 prototype guardrails (server-clamped) | 5 / 2 / 200 / 600 |
+| `SCAMURAI_PHASH_DISTANCE_THRESHOLD`, `SCAMURAI_PIXEL_CORRELATION_THRESHOLD`, `SCAMURAI_NEAR_DUPLICATE_RATIO` | Image/coordination tuning | 5 / 0.82 / 0.88 |
+| `SCAMURAI_JWT_SECRET`, `SCAMURAI_CORS_ORIGINS`, `SCAMURAI_EXPORT_LINK_TTL_SECONDS` | Security | change-me / localhost / 3600 |
+| `SCAMURAI_LLM_PROVIDER` | `groq` · `openrouter` · `gemini` | empty (deterministic rules only) |
+| `SCAMURAI_LLM_API_KEY`, `SCAMURAI_LLM_BASE_URL`, `SCAMURAI_LLM_MODEL_ID` | OpenAI-compatible LLM route | empty |
+| `SCAMURAI_GEMINI_API_KEY` | Native Gemini route | empty |
+| `SCAMURAI_YOUTUBE_API_KEY` | Live YouTube commentThreads import | empty |
+| `SCAMURAI_GOOGLE_FACTCHECK_API_KEY` | Live Claim Search | empty |
+| `SCAMURAI_REDDIT_CLIENT_ID/SECRET/USER_AGENT` | Approval-gated Reddit OAuth | empty |
 
 ---
 
@@ -265,11 +265,11 @@ membership. Interactive Swagger: **http://localhost:8000/docs**.
 ## Project layout
 
 ```
-ps03/
+scamurai/
 ├── backend/
 │   ├── app/
 │   │   ├── main.py              # FastAPI app, startup, safe error handlers, log hygiene
-│   │   ├── config.py            # env-driven PS03_ settings & guardrails
+│   │   ├── config.py            # env-driven SCAMURAI_ settings & guardrails
 │   │   ├── models.py            # evidence-first relational schema
 │   │   ├── registry.py          # 15 typed relationships + transform contracts
 │   │   ├── security.py          # RBAC, SSRF, signatures, redaction
@@ -334,6 +334,6 @@ the test harness clears credential env vars so a developer `.env` can never leak
 - pHash thresholds are configurable engineering defaults validated on fixtures, not
   forensic certainties; every match category carries its method and limits.
 - Dev tokens are a local convenience, not an identity system; replace with an IdP before
-  deployment, and set a real `PS03_JWT_SECRET`.
+  deployment, and set a real `SCAMURAI_JWT_SECRET`.
 - Legal admissibility (e.g. BSA Section 63), DPDP compliance and retention lawfulness
   require jurisdiction-specific review — hashes are integrity aids, not certifications.

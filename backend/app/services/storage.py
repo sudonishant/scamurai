@@ -1,7 +1,7 @@
 """Private object storage.
 
 Local disk in development; the same interface maps to an S3-compatible bucket
-when PS03_S3_ENDPOINT is configured (boto3 is an optional dependency).
+when SCAMURAI_S3_ENDPOINT is configured (boto3 is an optional dependency).
 Metadata and object keys live in PostgreSQL/SQLite — never the bytes themselves.
 """
 from __future__ import annotations

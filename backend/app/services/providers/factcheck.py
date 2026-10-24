@@ -37,7 +37,7 @@ def search_factchecks(query: str, *, language_code: str | None = None,
                       max_age_days: int | None = None,
                       client: httpx.Client | None = None) -> list[dict]:
     if not settings.google_factcheck_api_key:
-        raise FactCheckError("not_configured", "PS03_GOOGLE_FACTCHECK_API_KEY is not set")
+        raise FactCheckError("not_configured", "SCAMURAI_GOOGLE_FACTCHECK_API_KEY is not set")
     params: dict = {"query": query, "key": settings.google_factcheck_api_key, "pageSize": 25}
     if language_code:
         params["languageCode"] = language_code

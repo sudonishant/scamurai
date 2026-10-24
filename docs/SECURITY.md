@@ -52,7 +52,7 @@ of perfect security.
   live in the database, never the bytes.
 - Redacted export mode masks author identifiers, emails and phone numbers; full
   evidence mode is a separate restricted action with a previewed difference.
-- Download links expire (`PS03_EXPORT_LINK_TTL_SECONDS`; expired links return `410`).
+- Download links expire (`SCAMURAI_EXPORT_LINK_TTL_SECONDS`; expired links return `410`).
 - Audit log records case creation, imports, analyses, reviews and exports with actor IDs.
 - Retention is per-case (`retention_days`); deletion must propagate to objects, indexes
   and provider obligations (deletion workflow is a deployment task).
@@ -71,7 +71,7 @@ of perfect security.
 
 ## Deployment checklist
 
-- [ ] Replace dev tokens with an IdP; rotate `PS03_JWT_SECRET`.
+- [ ] Replace dev tokens with an IdP; rotate `SCAMURAI_JWT_SECRET`.
 - [ ] Run on PostgreSQL with Alembic migrations; back up and test restoration.
 - [ ] Enable TLS, private buckets, least-privilege service accounts.
 - [ ] DPDP Act / 2025 Rules and jurisdiction-specific privacy review before deployment.

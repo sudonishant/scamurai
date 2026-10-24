@@ -67,7 +67,7 @@ def fetch_youtube_comments(url_or_id: str, *, max_pages: int = 5,
     """Fetch bounded public comment threads. A caller-supplied client enables
     deterministic tests via httpx.MockTransport; production uses a default client."""
     if not settings.youtube_api_key:
-        raise YouTubeError("not_configured", "PS03_YOUTUBE_API_KEY is not set")
+        raise YouTubeError("not_configured", "SCAMURAI_YOUTUBE_API_KEY is not set")
     video_id = parse_video_id(url_or_id)
     if not video_id:
         raise YouTubeError("validation_error", "Could not parse an 11-character video id")

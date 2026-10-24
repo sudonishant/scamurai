@@ -1,7 +1,7 @@
 """Bounded job execution.
 
 The smallest runnable milestone uses an in-process ThreadPoolExecutor with
-durability in the relational store. When PS03_REDIS_URL is set the same task
+durability in the relational store. When SCAMURAI_REDIS_URL is set the same task
 contracts move to Celery (see worker.py); job *state* always lives in the
 database, so broker persistence is never mistaken for exactly-once delivery.
 

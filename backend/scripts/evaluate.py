@@ -15,9 +15,9 @@ import tempfile
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-os.environ.setdefault("PS03_DATABASE_URL",
+os.environ.setdefault("SCAMURAI_DATABASE_URL",
                       f"sqlite:///{pathlib.Path(tempfile.mkdtemp()) / 'eval.db'}".replace("///", "///", 1))
-os.environ.setdefault("PS03_STORAGE_DIR", str(pathlib.Path(tempfile.mkdtemp()) / "store"))
+os.environ.setdefault("SCAMURAI_STORAGE_DIR", str(pathlib.Path(tempfile.mkdtemp()) / "store"))
 
 from fastapi.testclient import TestClient  # noqa: E402
 

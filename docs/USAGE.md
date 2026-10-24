@@ -1,4 +1,4 @@
-# PS-03 Usage Guide (Hinglish)
+# Scamurai Usage Guide (Hinglish)
 
 Poora platform browser se chalता hai. Backend `:8000` (FastAPI) aur frontend `:5173`
 (React/Vite) dono alag services hain; frontend apne aap API calls ko backend par proxy

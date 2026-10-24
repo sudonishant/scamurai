@@ -14,13 +14,6 @@ from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-# Support both SCAMURAI_ and legacy PS03_ env vars
-for _k, _v in list(os.environ.items()):
-    if _k.startswith("PS03_"):
-        os.environ.setdefault("SCAMURAI_" + _k[5:], _v)
-    elif _k.startswith("SCAMURAI_"):
-        os.environ.setdefault("PS03_" + _k[9:], _v)
-
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="SCAMURAI_", env_file=".env", extra="ignore")

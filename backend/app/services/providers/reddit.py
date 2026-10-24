@@ -44,7 +44,7 @@ def client_credentials_token(client: httpx.Client | None = None) -> str:
             auth=(settings.reddit_client_id, settings.reddit_client_secret),
             data={"grant_type": "client_credentials"},
             headers={"User-Agent": settings.reddit_user_agent
-                     or "python:ps03-investigation:v0.1 (by /u/yourusername)"})
+                     or "python:scamurai-investigation:v0.1 (by /u/yourusername)"})
         if resp.status_code != 200:
             raise RuntimeError(f"reddit token error {resp.status_code}: {resp.text[:200]}")
         return resp.json()["access_token"]

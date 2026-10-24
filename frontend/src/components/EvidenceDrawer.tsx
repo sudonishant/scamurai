@@ -102,7 +102,7 @@ export default function EvidenceDrawer(
 }
 
 async function requestEvidence(caseId: string, id: string): Promise<EvidenceMeta> {
-  const token = localStorage.getItem("scamurai.devToken") || localStorage.getItem("ps03.devToken");
+  const token = localStorage.getItem("scamurai.devToken");
   const res = await fetch(`/api/v1/cases/${caseId}/evidence/${id}`, {
     headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
   });

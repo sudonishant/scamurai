@@ -136,7 +136,7 @@ def fetch_permitted_source(url: str, timeout: float = 8.0, max_bytes: int = 2_00
 
     try:
         with httpx.Client(follow_redirects=True, timeout=timeout, event_hooks={"request": [_guard]},
-                          headers={"User-Agent": "ps03-investigation/0.1 (+authorized-use)"}) as client:
+                          headers={"User-Agent": "scamurai-investigation/0.1 (+authorized-use)"}) as client:
             with client.stream("GET", url) as resp:
                 if resp.status_code in (401, 403):
                     return FetchResult("login_required", resp.status_code, provider=provider,

@@ -10,7 +10,7 @@ const TOKEN_KEY = "scamurai.devToken";
 const API_URL_KEY = "scamurai.apiUrl";
 
 export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY) || localStorage.getItem("ps03.devToken");
+  return localStorage.getItem(TOKEN_KEY);
 }
 export function setToken(token: string) {
   localStorage.setItem(TOKEN_KEY, token);

@@ -1,4 +1,4 @@
-"""PS-03 FastAPI entrypoint.
+"""Scamurai FastAPI entrypoint.
 
 Run locally:  uvicorn app.main:app --reload
 Interactive API docs: /docs  (OpenAPI contract at /openapi.json)

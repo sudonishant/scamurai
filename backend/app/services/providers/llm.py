@@ -31,7 +31,7 @@ def llm_status() -> dict:
         return {"configured": True, "provider": settings.llm_provider or "openai-compatible",
                 "model": settings.llm_model_id, "base_url": settings.llm_base_url}
     return {"configured": False, "provider": None,
-            "detail": "Set PS03_LLM_PROVIDER + PS03_LLM_API_KEY/BASE_URL or PS03_GEMINI_API_KEY"}
+            "detail": "Set SCAMURAI_LLM_PROVIDER + SCAMURAI_LLM_API_KEY/BASE_URL or SCAMURAI_GEMINI_API_KEY"}
 
 
 _SYSTEM = (
@@ -98,7 +98,7 @@ def chat_json(prompt: str, *, schema_hint: dict, temperature: float = 0.2,
     full_prompt = f"{prompt}\n\nRequired JSON shape: {json.dumps(schema_hint)}"
     if settings.llm_provider == "gemini":
         if not settings.gemini_api_key:
-            raise LLMUnavailable("PS03_GEMINI_API_KEY not set")
+            raise LLMUnavailable("SCAMURAI_GEMINI_API_KEY not set")
         model = settings.llm_model_id or "gemini-flash"
         return _gemini(
             f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",

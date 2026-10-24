@@ -5,7 +5,7 @@
   candidate retrieval after resize/recompression. It is a similarity
   representation, never a probability that two photos depict the same event.
 
-Thresholds are configurable (PS03_PHASH_DISTANCE_THRESHOLD) and must be
+Thresholds are configurable (SCAMURAI_PHASH_DISTANCE_THRESHOLD) and must be
 validated on representative fixtures rather than treated as universal truth.
 """
 from __future__ import annotations
