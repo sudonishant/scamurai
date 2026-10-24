@@ -19,5 +19,5 @@ def test_canonical_dotenv_values_are_loaded(tmp_path, monkeypatch):
 def test_legacy_prefixed_dotenv_values_are_ignored(tmp_path, monkeypatch):
     monkeypatch.delenv("SCAMURAI_DATABASE_URL", raising=False)
     env_file = tmp_path / ".env"
-    env_file.write_text("PS03_DATABASE_URL=sqlite:///./legacy.db\n", encoding="utf-8")
+    env_file.write_text("LEGACY_DATABASE_URL=sqlite:///./legacy.db\n", encoding="utf-8")
     assert Settings(_env_file=env_file).database_url == "sqlite:///./scamurai_dev.db"
