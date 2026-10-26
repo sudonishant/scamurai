@@ -179,6 +179,12 @@ svg { flex-shrink: 0; }
 .empty-state.compact { min-height: 100px; flex-direction: row; gap: 10px; }
 .empty-inline { display: flex; align-items: center; gap: 9px; color: var(--muted); padding: 18px 4px; font-size: 12px; }
 .empty-inline svg { color: var(--accent); }
+.data-provenance-banner { display: flex; align-items: flex-start; gap: 12px; margin: 10px 20px; padding: 10px 13px; border: 1px solid; border-radius: 9px; font-size: 10px; line-height: 1.55; }
+.data-provenance-banner.sandbox { color: #f2d5a8; background: rgba(235,180,108,.07); border-color: rgba(235,180,108,.32); }
+.data-provenance-banner.live { color: #c4d7c5; background: rgba(26,255,52,.035); border-color: rgba(26,255,52,.16); }
+.data-provenance-label { flex: 0 0 auto; font-size: 9px; font-weight: 800; letter-spacing: .08em; }
+.data-provenance-banner p { margin: 0; color: inherit; }
+.case-demo-tag { margin-left: 8px; color: var(--amber); border-color: rgba(235,180,108,.3); }
 
 .workspace { height: calc(100vh - 60px); min-height: 620px; display: flex; flex-direction: column; overflow: hidden; }
 .casebar { flex: 0 0 66px; display: flex; align-items: center; justify-content: space-between; gap: 15px; padding: 0 20px; background: var(--panel); border-bottom: 1px solid var(--border); }
@@ -582,6 +588,8 @@ td > small, td span + small { display: block; color: var(--faint); font-size: 8p
 .evidence-chain { padding: 9px 10px; margin: 8px 0; background: var(--bg-soft); border-left: 2px solid var(--blue); border-radius: 0 7px 7px 0; font-size: 10px; }
 .evidence-chain p { margin: 5px 0; color: var(--muted); }
 .evidence-chain a { display: inline-flex; align-items: center; gap: 4px; }
+.illustrative-source { display: grid; gap: 3px; margin: 5px 0; color: var(--muted); font-size: 9px; overflow-wrap: anywhere; }
+.illustrative-source b { color: var(--amber); font-size: 8px; letter-spacing: .06em; }
 .scroll { height: 100%; overflow: auto; padding: 18px; }
 .findings-group { margin-bottom: 20px; }
 .finding-card, .compare-pair { padding: 13px; margin: 8px 0; background: var(--panel); border: 1px solid var(--border-soft); border-radius: 9px; }
@@ -932,4 +940,6 @@ h1, h2, h3, h4 { font-family: "JetBrains Mono", ui-monospace, monospace; }
   .metric-pairs { grid-template-columns: 1fr; }
   .global-search-results { max-height: 65vh; }
   .provenance-grid { grid-template-columns: 1fr 1fr; }
+  .data-provenance-banner { flex-direction: column; gap: 4px; margin: 8px 10px; padding: 9px 10px; }
+  .case-demo-tag { margin-left: 0; }
 }

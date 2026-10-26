@@ -8,7 +8,7 @@ It is deliberately **an investigation tool, not an accusation engine**:
 - “Earliest observed” means earliest **inside the collected case corpus**, not platform-wide origin.
 - A timing or repetition score is not a bot probability, maliciousness score, or common-ownership finding.
 - A missing API result, inaccessible post, absent metadata field, or empty fact-check response is not proof that something does not exist.
-- The product runtime is **live-only**. Authentication, provider, and transport failures remain visible; they never activate synthetic evidence or an offline demo. Synthetic fixtures are confined to automated tests and evaluation.
+- A connected live API never falls back to synthetic data when authentication, provider, or transport fails. GitHub Pages/is-a.dev with no API URL is a separate browser-only preview using explicitly labelled fictional examples stored locally; it is not source-backed and is isolated from backend cases. Do not enter private or sensitive case data in the preview.
 
 ## Implemented capabilities
 
@@ -124,14 +124,14 @@ For production, set `SCAMURAI_ENVIRONMENT=production` and `SCAMURAI_DEV_AUTH_ENA
 ### Live session behavior
 
 - **Open live workspace** validates the token by calling the real cases API. Failures stay on screen.
-- There is no demo button, demo route, synthetic fallback, or fabricated “offline result.”
+- There is no demo button or route. A static-host preview with no API configured uses a synthetic local corpus; a configured live API never substitutes that corpus when a request fails.
 - Logout clears only Scamurai’s session keys, not unrelated browser storage.
 - The default API address is same-origin; Vite proxies `/api` to FastAPI. A remote API can be configured before login or from the top bar when CORS permits it.
 - A 401 ends the stale workspace session and returns to sign-in with an explicit message while preserving the configured backend URL.
 
 ### GitHub Pages frontend + separately deployed API
 
-GitHub Pages can host the static UI, but it cannot run FastAPI or OSINT workers. The included workflow never substitutes demo data when no backend is configured.
+GitHub Pages can host the static UI, but it cannot run FastAPI or OSINT workers. With no backend URL, it opens an explicitly labelled synthetic browser preview. Configure a live API to work with actual case data; live API errors remain visible and never switch to preview data.
 
 1. Deploy FastAPI separately with durable storage/workers appropriate for the environment.
 2. In the repository's GitHub Actions variables, optionally set the **non-secret** `SCAMURAI_PUBLIC_API_URL` to the public FastAPI base URL. The workflow exposes it as `VITE_API_BASE_URL` at build time. Users can instead enter it under **Live API connection** on the sign-in screen.
@@ -251,7 +251,7 @@ backend/scripts/ evaluation, OIDC provisioning and disposable Compose smoke
 backend/tests/   acceptance, security, provider, intelligence, configuration and operations tests
 frontend/src/
   components/    mission dashboards, source workbench, graph/evidence and review views
-  lib/           typed live-only API client and shared types
+  lib/           typed live API client, isolated synthetic browser preview and shared types
 frontend/e2e/    self-contained Playwright browser checks with isolated validation fixtures
 docs/            architecture, usage, integrations, intelligence methods, security, validation
 ```

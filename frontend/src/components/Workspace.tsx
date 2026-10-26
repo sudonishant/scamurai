@@ -22,6 +22,7 @@ import AlertsView from "./AlertsView";
 import AccountsView from "./AccountsView";
 import GlobalSearch from "./GlobalSearch";
 import Icon from "./Icon";
+import DataProvenanceBanner from "./DataProvenanceBanner";
 
 type Tab = "overview" | "alerts" | "narratives" | "geo" | "osint" | "accounts" | "network" | "graph" | "entities" | "media" | "comments" | "findings" | "compare" | "exports" | "connectors" | "agent";
 interface Focus { account?: string; alert?: string; post?: string; finding?: string; evidence?: string; [key: string]: string | undefined }
@@ -133,6 +134,7 @@ export default function Workspace({ caseId, initialGoal }: { caseId: string; ini
       <GlobalSearch caseId={caseId} onSelect={(target) => { const { tab: next, ...targetFocus } = target; navigate(next, targetFocus); }} />
       <div className="casebar-actions"><button className="btn btn-secondary" onClick={() => setShowCollector(!showCollector)}><Icon name="upload" /> Collect & run</button><button className={`btn btn-quiet ${activeJobs ? "has-active" : ""}`} onClick={() => setShowJobs(!showJobs)}><Icon name="clock" /> Jobs {activeJobs > 0 && <span className="count-badge">{activeJobs}</span>}</button></div>
     </header>
+    <DataProvenanceBanner />
     {showCollector && <UploadBar caseId={caseId} caseData={caseData} initialGoal={initialGoal} onChanged={bump} onClose={() => setShowCollector(false)} />}
     {error && <div className="workspace-error"><Icon name="alert" />{error}<button onClick={refresh}>Retry</button></div>}
     <div className="workspace-body">

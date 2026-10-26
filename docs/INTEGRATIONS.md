@@ -33,9 +33,9 @@ permission_denied · rate_limited · unavailable · not_configured
 
 A failed or restricted source is not a successful empty result. `successful_empty` is reserved for a source that actually responded with no matching records. Analytics also turns relevant access failures into visible data-coverage review cues.
 
-## Live-only runtime and QA fixture boundary
+## Live API and browser-preview boundary
 
-The product frontend has no demo mode or demo route. Live API, authentication, provider, and network failures throw visible errors and never activate synthetic content. Clearly labelled synthetic records exist only in automated tests/evaluation fixtures; they are not a fallback investigation path and are not included in a clean preview. The old `make seed` showcase workflow has been removed.
+GitHub Pages/is-a.dev with no API URL opens a browser-only synthetic preview. Its seeded case, analytics, findings and source records are fictional UI examples, clearly labelled as not source-backed, stored in browser local storage and isolated from backend cases. Do not enter private or sensitive information there; live source collection is disabled in preview mode. A configured live API is separate: authentication, provider and network failures remain visible and never activate synthetic content. Synthetic records used by automated tests/evaluation are likewise not live evidence. The old `make seed` showcase workflow has been removed.
 
 ## Enabling a provider safely
 

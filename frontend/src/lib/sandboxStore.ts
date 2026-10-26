@@ -9,8 +9,8 @@ const COMMENTS_KEY = "scamurai.sandbox.comments";
 
 export const SEED_CASE: Case = {
   id: "case-rain-photo-001",
-  title: "Flood Misinformation & Synthetic Media Campaign",
-  purpose: "Investigate coordinated distribution of recycled flood photos and automated amplification across social channels.",
+  title: "[SYNTHETIC DEMO] Flood Narrative Example",
+  purpose: "Fictional browser-preview scenario; illustrative records only, not source-backed findings.",
   allowed_sources: ["https://public-web.org", "https://mastodon.social", "authorized_exports"],
   date_from: "2026-10-15T00:00:00Z",
   date_to: "2026-10-24T23:59:59Z",
@@ -538,57 +538,6 @@ export class SandboxStore {
 
   static getOsintReport(_caseId: string, _reportId: string): OsintReport {
     return { ...SEED_OSINT_REPORT };
-  }
-
-  static async investigateOsint(_caseId: string, target: string, modules?: string[]): Promise<OsintReport> {
-    const cleanTarget = target.trim().replace(/^https?:\/\//i, "").replace(/\/.*$/, "");
-    let dnsData: any = { A: ["104.21.48.192"], NS: ["dns1.registrar.com"], TXT: ["v=spf1 -all"] };
-
-    try {
-      const res = await fetch(`https://dns.google/resolve?name=${encodeURIComponent(cleanTarget)}&type=A`, { headers: { Accept: "application/dns-json" } });
-      if (res.ok) {
-        const json = await res.json();
-        if (json.Answer?.length) {
-          dnsData.A = json.Answer.map((a: any) => a.data);
-        }
-      }
-    } catch {
-      /* fallback to bounded observation */
-    }
-
-    const report: OsintReport = {
-      id: `rep-${Date.now().toString(36)}`,
-      evidence_id: `ev-${Date.now().toString(36)}`,
-      object_hash: Math.random().toString(36).slice(2, 10),
-      schema_version: "1.0",
-      target: cleanTarget,
-      normalized_target: cleanTarget.toLowerCase(),
-      target_type: cleanTarget.includes(".") ? "domain" : "indicator",
-      host: cleanTarget,
-      registrable_domain: cleanTarget,
-      status: "succeeded",
-      generated_at: new Date().toISOString(),
-      modules: (modules || ["dns", "rdap", "web", "certificates", "archive"]).map((m) => {
-        if (m === "dns") {
-          return { module: "dns", status: "succeeded", data: dnsData, error: null, collected_at: new Date().toISOString() };
-        }
-        if (m === "rdap") {
-          return {
-            module: "rdap", status: "succeeded",
-            data: { registrar: "IANA Public Bootstrap", domain_status: ["active"], queried: cleanTarget },
-            error: null, collected_at: new Date().toISOString(),
-          };
-        }
-        return {
-          module: m, status: "succeeded",
-          data: { observation: `Bounded public ${m} scan completed for ${cleanTarget}.`, timestamp: new Date().toISOString() },
-          error: null, collected_at: new Date().toISOString(),
-        };
-      }),
-      summary: { sources_succeeded: (modules || []).length || 5, sources_total: (modules || []).length || 5, sources_limited: 0 },
-      limitations: ["Keyless public observations. Multi-source triangulation advised."],
-    };
-    return report;
   }
 
   static getMediaForensics(_caseId: string): MediaForensicsResult[] {

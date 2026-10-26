@@ -12,7 +12,7 @@ This document describes what the analytics actually compute. It is a method refe
 | Optional model output | Configured image-classifier labels and scores | Model-specific, uncalibrated output requiring independent validation |
 | Human decision | Accepted, rejected, needs more evidence | Reviewer decision attached to a finding, not an automatic truth label |
 
-No heuristic or model result is silently promoted to a source fact. The investigation runtime is live-only; clearly labelled synthetic records are confined to automated QA/evaluation and are never used as a live-error fallback.
+No heuristic or model result is silently promoted to a source fact. The static browser preview uses clearly labelled fictional examples and is not a source of real-world findings. In live API mode, authentication, provider and network failures remain visible; they never activate synthetic data.
 
 ## Narrative candidates and propagation
 

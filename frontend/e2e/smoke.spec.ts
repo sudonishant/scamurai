@@ -26,7 +26,7 @@ async function waitForJob(request: any, jobId: string) {
   await expect.poll(async () => (await (await request.get(`/api/v1/cases/${caseId}/jobs/${jobId}`, { headers: AUTH })).json()).lifecycle).toBe("completed");
 }
 
-// QA-only corpus created through the real API. The product itself has no demo mode.
+// QA-only corpus created through the real API; static-host synthetic preview is tested separately.
 test.beforeAll(async ({ request }) => {
   caseTitle = `Playwright validation ${Date.now()}`;
   const created = await request.post("/api/v1/cases", { headers: AUTH, data: { title: caseTitle, purpose: "Self-contained browser validation corpus", languages: ["en"] } });
@@ -61,6 +61,7 @@ test("live workspace renders real API data and access requirements", async ({ pa
   await page.getByLabel("Bearer token").fill("dev-token-owner");
   await page.getByRole("button", { name: "Open live workspace" }).click();
   await expect(page.getByRole("heading", { name: "Choose an investigation" })).toBeVisible();
+  await expect(page.getByRole("note", { name: "Data provenance notice" })).toContainText("LIVE API · CASE-SCOPED DATA");
 
   const caseRow = page.locator(".case-row").filter({ hasText: caseTitle });
   await caseRow.getByRole("button", { name: /Open case/i }).click();
@@ -91,7 +92,7 @@ test("live workspace renders real API data and access requirements", async ({ pa
   expect(runtimeErrors).toEqual([]);
 });
 
-test("runtime has no demo path and real finding reviews refresh", async ({ page }) => {
+test("live API mode has no demo fallback and real finding reviews refresh", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("button", { name: /Explore synthetic demo/i })).toHaveCount(0);
   await page.getByLabel("Bearer token").fill("Bearer dev-token-owner");

@@ -435,11 +435,15 @@ export const api = {
     } as any)
   ),
 
-  investigateOsint: (caseId: string, target: string, modules?: string[]) => request<OsintReport>(
-    `/api/v1/cases/${caseId}/osint/investigate`,
-    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ target, modules }) },
-    () => SandboxStore.investigateOsint(caseId, target, modules)
-  ),
+  investigateOsint: (caseId: string, target: string, modules?: string[]) => {
+    if (isSandboxActive()) {
+      return Promise.reject(new ApiError(503, "Live OSINT collection is disabled in the synthetic browser preview. Configure a live backend for source-attributed observations."));
+    }
+    return request<OsintReport>(
+      `/api/v1/cases/${caseId}/osint/investigate`,
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ target, modules }) }
+    );
+  },
 
   osintReports: (caseId: string) => request<OsintReportSummary[]>(
     `/api/v1/cases/${caseId}/osint/reports`,

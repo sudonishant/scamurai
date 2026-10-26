@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, downloadOsintReport } from "../lib/api";
+import { api, ApiError, downloadOsintReport, isSandboxActive } from "../lib/api";
 import type { OsintModule, OsintReport, OsintReportSummary } from "../lib/types";
 import Icon from "./Icon";
 import { EmptyView, ErrorView, PageHeader, ScopeNotice, formatDate } from "./AnalyticsPrimitives";
@@ -22,7 +22,8 @@ export default function OsintView({ caseId, role, onChanged }: { caseId: string;
   const [section, setSection] = useState<Section>("overview");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const canRun = ["owner", "analyst"].includes(role);
+  const sandboxMode = isSandboxActive();
+  const canRun = !sandboxMode && ["owner", "analyst"].includes(role);
 
   const loadReports = useCallback(async () => {
     try { setReports(await api.osintReports(caseId)); }
@@ -48,8 +49,9 @@ export default function OsintView({ caseId, role, onChanged }: { caseId: string;
 
   const module = (name: string) => report?.modules.find((m) => m.module === name) || null;
   return <div className="view-page">
-    <PageHeader eyebrow="LIVE PUBLIC INFRASTRUCTURE" title="Live OSINT workbench" description="Real bounded requests with source-attributed DNS, registration, web, certificate and archive observations. No demo results." actions={report?.id && <button className="btn btn-secondary" onClick={() => downloadOsintReport(caseId, report.id!)}><Icon name="download" /> Export evidence JSON</button>} />
+    <PageHeader eyebrow={sandboxMode ? "SYNTHETIC PUBLIC DEMO" : "LIVE PUBLIC INFRASTRUCTURE"} title={sandboxMode ? "OSINT preview" : "Live OSINT workbench"} description={sandboxMode ? "Preview reports are fictional examples. Configure a live backend to collect real, source-attributed public observations." : "Real bounded requests with source-attributed DNS, registration, web, certificate and archive observations."} actions={report?.id && !sandboxMode && <button className="btn btn-secondary" onClick={() => downloadOsintReport(caseId, report.id!)}><Icon name="download" /> Export evidence JSON</button>} />
     <ScopeNotice><b>Research, not intrusion.</b> No port scanning, exploit, breach lookup, login bypass or private identity resolution. Public observations are time-sensitive and require corroboration.</ScopeNotice>
+    {sandboxMode && <div className="inline-alert standalone" role="note"><Icon name="info" /><span>Live OSINT collection is disabled in this browser preview. Historical report examples below are synthetic and were not fetched from the displayed sources.</span></div>}
     <section className="card osint-search-card">
       <div className="osint-target-row"><div className="search-field large"><Icon name="globe" /><input value={target} onChange={(e) => setTarget(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !busy) investigate(); }} placeholder="example.com or https://example.com/public-page" disabled={!canRun || busy} /></div><button className="btn btn-primary" disabled={!canRun || busy || !target.trim() || !selectedModules.length} onClick={investigate}>{busy ? <span className="spinner" /> : <Icon name="search" />}{busy ? "Collecting sources…" : "Investigate target"}</button></div>
       <div className="module-picker">{MODULE_INFO.map((item) => <label key={item.id} className={selectedModules.includes(item.id) ? "selected" : ""}><input type="checkbox" checked={selectedModules.includes(item.id)} disabled={!canRun || busy} onChange={() => setSelectedModules((current) => current.includes(item.id) ? current.filter((id) => id !== item.id) : [...current, item.id])} /><span><b>{item.name}</b><small>{item.desc}</small></span></label>)}</div>
