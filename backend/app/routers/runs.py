@@ -12,7 +12,8 @@ from sqlalchemy.orm import Session
 
 from ..config import get_settings
 from ..database import SessionLocal, get_db
-from ..models import Job
+from ..models import Input, Job
+from ..policies import clamp_run_limits
 from ..registry import TRANSFORMS
 from ..schemas import JobOut, RunCreate, TransformCreate
 from ..security import require_case
@@ -69,7 +70,7 @@ def create_run(body: RunCreate, ctx=Depends(require_case({"analyst", "owner"})),
         client_idempotency_key=body.client_idempotency_key, run_id=run_id)
     if created:
         submit(job.id, job.kind)
-    return {"run_id": run_id, "job_id": job.id, "replayed": not created}
+    return {"run_id": job.run_id or run_id, "job_id": job.id, "replayed": not created}
 
 
 @router.get("/jobs/{job_id}", response_model=JobOut)

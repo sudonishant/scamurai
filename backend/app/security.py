@@ -11,6 +11,7 @@ import ipaddress
 import socket
 from dataclasses import dataclass
 from functools import lru_cache
+from pathlib import PurePosixPath
 from urllib.parse import urlparse
 
 import jwt

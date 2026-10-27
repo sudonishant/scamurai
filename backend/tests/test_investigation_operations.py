@@ -99,7 +99,7 @@ def test_oidc_signature_claims_provisioning_and_directory(client, monkeypatch, r
     assert valid.status_code == 200, valid.text
     assert len(valid.json()) == 1
     assert valid.json()[0]["email"] == "owner@scamurai.local"
-    assert valid.json()[0]["token_hint"] is None
+    assert valid.json()[0].get("token_hint") is None
 
     wrong_audience = client.get("/api/v1/cases", headers={
         "Authorization": f"Bearer {make_token(audience='another-api')}"})

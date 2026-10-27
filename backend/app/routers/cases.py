@@ -48,8 +48,7 @@ def _serialize_case(case: Case, role: str) -> CaseOut:
 def list_users(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     # The development role picker is never a production user directory.
     rows = db.scalars(select(User)).all() if settings.dev_auth_enabled else [user]
-    return [{"id": row.id, "email": row.email, "name": row.name,
-             "token_hint": row.dev_token if settings.dev_auth_enabled else None}
+    return [{"id": row.id, "email": row.email, "name": row.name}
             for row in rows]
 
 
@@ -167,13 +166,19 @@ async def upload(
     raw = await file.read()
     if len(raw) > settings.max_upload_bytes:
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Upload exceeds case limit")
-    idempotency_key = f"upload:{storage.sha256_hex(raw)}:{file.filename}"
+    if kind not in {"image", "csv", "json"}:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Unsupported upload kind")
+    filename = sanitize_upload_filename(file.filename)
+    content_digest = storage.sha256_hex(raw)
+    request_digest = storage.sha256_hex(
+        "\0".join((kind, content_digest, filename, meta)).encode("utf-8"))
+    idempotency_key = f"upload:v1:{request_digest}"
     existing = db.scalar(select(Input).where(
         Input.case_id == ctx.case.id, Input.idempotency_key == idempotency_key))
     if existing is not None:
         response.status_code = status.HTTP_200_OK
         return _serialize_input(db, existing, replayed=True)
-    inp = Input(case_id=ctx.case.id, kind=kind, filename=file.filename,
+    inp = Input(case_id=ctx.case.id, kind=kind, filename=filename,
                 content_type=file.content_type, byte_length=len(raw),
                 payload=json.dumps({"meta": meta}), created_by=ctx.user.id,
                 idempotency_key=idempotency_key)
@@ -187,7 +192,8 @@ async def upload(
         existing = db.scalar(select(Input).where(
             Input.case_id == ctx.case.id, Input.idempotency_key == idempotency_key))
         if existing:
-            return _serialize_input(db, existing)
+            response.status_code = status.HTTP_200_OK
+            return _serialize_input(db, existing, replayed=True)
         raise
     try:
         if kind == "image":

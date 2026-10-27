@@ -46,3 +46,9 @@ def upgrade_db() -> None:
     config = Config(str(backend_dir / "alembic.ini"))
     config.set_main_option("script_location", str(backend_dir / "alembic"))
     command.upgrade(config, "head")
+
+
+def init_db() -> None:
+    """Convenience initialization for non-production environments."""
+    upgrade_db()
+

@@ -50,7 +50,8 @@ def image_dir():
 def client():
     from fastapi.testclient import TestClient
 
-    from app.database import Base, engine
+    from sqlalchemy import text
+    from app.database import Base, engine, upgrade_db
     from app.main import create_app, seed_users
     from app.services.jobs import reconcile_orphans
 
