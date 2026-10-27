@@ -6,9 +6,9 @@ Extracts message text, timestamps, post IDs, views, forward trails, and embedded
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
 from html.parser import HTMLParser
 from urllib.parse import urlparse
+
 import httpx
 
 from ..osint import extract_iocs_from_text
@@ -96,7 +96,7 @@ def parse_telegram_preview_html(html_text: str, channel: str) -> list[dict]:
     results = []
     # Pattern-based extraction fallback for high reliability
     post_blocks = re.findall(r'<div class="[^"]*tgme_widget_message[^"]*"[^>]*data-post="([^"]+)"(.*?)<div class="tgme_widget_message_footer', html_text, re.DOTALL)
-    
+
     if post_blocks:
         for post_id, block in post_blocks:
             # Text
@@ -152,7 +152,7 @@ def fetch_public_channel(channel: str, limit: int = 50) -> dict:
                 raise TelegramError("transport_failure", f"Telegram returned HTTP {resp.status_code}")
             html_text = resp.text
     except httpx.RequestError as exc:
-        raise TelegramError("network_unreachable", f"Failed to connect to Telegram: {type(exc).__name__}")
+        raise TelegramError("network_unreachable", f"Failed to connect to Telegram: {type(exc).__name__}") from exc
 
     raw_posts = parse_telegram_preview_html(html_text, channel)
     selected = raw_posts[-limit:]

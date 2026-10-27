@@ -128,11 +128,11 @@ def pixel_indicators(image: Image.Image, mime: str) -> dict:
         max_r = min(cx, cy)
         low_freq_mask = r <= (max_r * 0.3)
         high_freq_mask = (r > (max_r * 0.7)) & (r <= max_r)
-        
+
         low_energy = float(np.sum(magnitude[low_freq_mask]))
         high_energy = float(np.sum(magnitude[high_freq_mask]))
         total_energy = float(np.sum(magnitude)) + 1e-9
-        
+
         high_freq_ratio = round(high_energy / total_energy, 6)
         low_freq_ratio = round(low_energy / total_energy, 6)
         result["fft_spectral_analysis"] = {
@@ -231,11 +231,15 @@ def analyze_asset(db: Session, case_id: str, media: MediaAsset, analysis_run: An
 
 def analyze_video_keyframes(video_bytes: bytes, max_frames: int = 15, sample_fps: float = 1.0) -> dict:
     """InVID / WeVerify style Video Keyframe Extraction and Temporal Forensic Analysis."""
+    import os
+    import shutil
     import subprocess
     import tempfile
-    import os
 
-    ffmpeg_bin = "/home/nee/.local/bin/ffmpeg" if os.path.exists("/home/nee/.local/bin/ffmpeg") else "ffmpeg"
+    from ..config import get_settings
+
+    settings = get_settings()
+    ffmpeg_bin = settings.ffmpeg_bin or shutil.which("ffmpeg") or "ffmpeg"
 
     with tempfile.TemporaryDirectory() as tmpdir:
         input_file = os.path.join(tmpdir, "input_video.mp4")
@@ -248,10 +252,10 @@ def analyze_video_keyframes(video_bytes: bytes, max_frames: int = 15, sample_fps
             "-vf", f"fps={sample_fps}",
             "-vframes", str(max_frames),
             "-q:v", "2",
-            frame_pattern
+            frame_pattern,
         ]
         try:
-            subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=20)
+            subprocess.run(cmd, capture_output=True, timeout=20)
         except Exception as exc:
             return {"status": "ffmpeg_execution_failed", "error": str(exc), "timeline": []}
 

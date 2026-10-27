@@ -20,8 +20,9 @@ os.environ.setdefault("SCAMURAI_DATABASE_URL",
 os.environ.setdefault("SCAMURAI_STORAGE_DIR", str(pathlib.Path(tempfile.mkdtemp()) / "store"))
 
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 
-from app.database import Base, engine
+from app.database import Base, engine, upgrade_db
 from app.main import create_app, seed_users
 
 FIXTURES = pathlib.Path(__file__).resolve().parents[1] / "fixtures"

@@ -1,28 +1,29 @@
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "../lib/api";
 import type { AnalyticsData, Case, GraphData, GraphEdge, GraphNode, Job } from "../lib/types";
-import GraphCanvas from "./GraphCanvas";
 import LeftPanel from "./LeftPanel";
 import EvidenceDrawer from "./EvidenceDrawer";
 import JobsPanel from "./JobsPanel";
 import UploadBar from "./UploadBar";
-import CommentsView from "./CommentsView";
-import FindingsView from "./FindingsView";
-import CompareView from "./CompareView";
-import ExportsView from "./ExportsView";
-import AgentView from "./AgentView";
-import ConnectorsView from "./ConnectorsView";
 import OverviewView from "./OverviewView";
-import NarrativesView from "./NarrativesView";
-import NetworkView from "./NetworkView";
-import GeoView from "./GeoView";
-import OsintView from "./OsintView";
-import MediaView from "./MediaView";
-import AlertsView from "./AlertsView";
-import AccountsView from "./AccountsView";
 import GlobalSearch from "./GlobalSearch";
 import Icon from "./Icon";
 import DataProvenanceBanner from "./DataProvenanceBanner";
+
+const GraphCanvas = lazy(() => import("./GraphCanvas"));
+const CommentsView = lazy(() => import("./CommentsView"));
+const FindingsView = lazy(() => import("./FindingsView"));
+const CompareView = lazy(() => import("./CompareView"));
+const ExportsView = lazy(() => import("./ExportsView"));
+const AgentView = lazy(() => import("./AgentView"));
+const ConnectorsView = lazy(() => import("./ConnectorsView"));
+const NarrativesView = lazy(() => import("./NarrativesView"));
+const NetworkView = lazy(() => import("./NetworkView"));
+const GeoView = lazy(() => import("./GeoView"));
+const OsintView = lazy(() => import("./OsintView"));
+const MediaView = lazy(() => import("./MediaView"));
+const AlertsView = lazy(() => import("./AlertsView"));
+const AccountsView = lazy(() => import("./AccountsView"));
 
 type Tab = "overview" | "alerts" | "narratives" | "geo" | "osint" | "accounts" | "network" | "graph" | "entities" | "media" | "comments" | "findings" | "compare" | "exports" | "connectors" | "agent";
 interface Focus { account?: string; alert?: string; post?: string; finding?: string; evidence?: string; [key: string]: string | undefined }
@@ -142,26 +143,28 @@ export default function Workspace({ caseId, initialGoal }: { caseId: string; ini
       <main className="workspace-main">
         {loading && <div className="top-loading"><span className="spinner dark" /> Syncing case evidence…</div>}
         {tab === "overview" && <OverviewView data={analytics} loading={loading} error={analyticsError} onRefresh={bump} onNavigate={navigate} onCollect={() => setShowCollector(true)} />}
-        {tab === "alerts" && <AlertsView caseId={caseId} role={caseData?.my_role || "viewer"} refreshToken={refreshToken} onChanged={bump} initialAlertId={focus.alert} />}
-        {tab === "narratives" && <NarrativesView data={analytics} onRefresh={bump} initialPostId={focus.post} />}
-        {tab === "network" && <NetworkView data={analytics} onRefresh={bump} onAccount={(accountId) => navigate("accounts", { account: accountId })} />}
-        {tab === "accounts" && <AccountsView caseId={caseId} refreshToken={refreshToken} initialAccountId={focus.account} />}
-        {tab === "geo" && <GeoView data={analytics} onRefresh={bump} />}
-        {tab === "osint" && <OsintView caseId={caseId} role={caseData?.my_role || "viewer"} onChanged={bump} />}
-        {tab === "media" && <MediaView caseId={caseId} role={caseData?.my_role || "viewer"} jobs={jobs} onChanged={bump} />}
-        {tab === "graph" && <div className="graph-view-layout"><LeftPanel caseId={caseId} graph={graph} relationFilter={relationFilter} onFilterChange={(rels) => { setRelationFilter(rels); bump(); }} onRefresh={bump} /><div className="graph-center"><GraphCanvas data={graph} refreshToken={refreshToken} onSelectNode={(node) => { setSelectedNode(node); setSelectedEdge(null); }} onSelectEdge={(edge) => { setSelectedEdge(edge); setSelectedNode(null); }} /></div><EvidenceDrawer caseId={caseId} node={selectedNode} edge={selectedEdge} onClose={() => { setSelectedNode(null); setSelectedEdge(null); }} /></div>}
-        {tab === "entities" && <EntityList graph={graph} onPick={(node) => {
-          if (node.entity_type === "account") { navigate("accounts", { account: node.entity_id }); return; }
-          const nextFocus = node.entity_type === "evidence" ? { evidence: node.entity_id } : node.entity_type === "post" ? { post: node.entity_id } : {};
-          navigate(node.entity_type === "post" ? "narratives" : "graph", nextFocus);
-          if (node.entity_type !== "post") setSelectedNode(node);
-        }} />}
-        {tab === "comments" && <CommentsView caseId={caseId} onChanged={bump} />}
-        {tab === "findings" && <FindingsView caseId={caseId} role={caseData?.my_role || "viewer"} refreshToken={refreshToken} onChanged={bump} initialFindingId={focus.finding} />}
-        {tab === "compare" && <CompareView caseId={caseId} graph={graph} />}
-        {tab === "connectors" && <ConnectorsView caseId={caseId} role={caseData?.my_role || "viewer"} onChanged={bump} />}
-        {tab === "exports" && <ExportsView caseId={caseId} role={caseData?.my_role || "viewer"} />}
-        {tab === "agent" && <AgentView caseId={caseId} role={caseData?.my_role || "viewer"} />}
+        <Suspense fallback={<div className="panel" style={{ padding: 24, textAlign: "center", color: "var(--text-muted, #7e8b9b)" }}><span className="spinner dark" /> Loading view…</div>}>
+          {tab === "alerts" && <AlertsView caseId={caseId} role={caseData?.my_role || "viewer"} refreshToken={refreshToken} onChanged={bump} initialAlertId={focus.alert} />}
+          {tab === "narratives" && <NarrativesView data={analytics} onRefresh={bump} initialPostId={focus.post} />}
+          {tab === "network" && <NetworkView data={analytics} onRefresh={bump} onAccount={(accountId) => navigate("accounts", { account: accountId })} />}
+          {tab === "accounts" && <AccountsView caseId={caseId} refreshToken={refreshToken} initialAccountId={focus.account} />}
+          {tab === "geo" && <GeoView data={analytics} onRefresh={bump} />}
+          {tab === "osint" && <OsintView caseId={caseId} role={caseData?.my_role || "viewer"} onChanged={bump} />}
+          {tab === "media" && <MediaView caseId={caseId} role={caseData?.my_role || "viewer"} jobs={jobs} onChanged={bump} />}
+          {tab === "graph" && <div className="graph-view-layout"><LeftPanel caseId={caseId} graph={graph} relationFilter={relationFilter} onFilterChange={(rels) => { setRelationFilter(rels); bump(); }} onRefresh={bump} /><div className="graph-center"><GraphCanvas data={graph} refreshToken={refreshToken} onSelectNode={(node) => { setSelectedNode(node); setSelectedEdge(null); }} onSelectEdge={(edge) => { setSelectedEdge(edge); setSelectedNode(null); }} /></div><EvidenceDrawer caseId={caseId} node={selectedNode} edge={selectedEdge} onClose={() => { setSelectedNode(null); setSelectedEdge(null); }} /></div>}
+          {tab === "entities" && <EntityList graph={graph} onPick={(node) => {
+            if (node.entity_type === "account") { navigate("accounts", { account: node.entity_id }); return; }
+            const nextFocus = node.entity_type === "evidence" ? { evidence: node.entity_id } : node.entity_type === "post" ? { post: node.entity_id } : {};
+            navigate(node.entity_type === "post" ? "narratives" : "graph", nextFocus);
+            if (node.entity_type !== "post") setSelectedNode(node);
+          }} />}
+          {tab === "comments" && <CommentsView caseId={caseId} onChanged={bump} />}
+          {tab === "findings" && <FindingsView caseId={caseId} role={caseData?.my_role || "viewer"} refreshToken={refreshToken} onChanged={bump} initialFindingId={focus.finding} />}
+          {tab === "compare" && <CompareView caseId={caseId} graph={graph} />}
+          {tab === "connectors" && <ConnectorsView caseId={caseId} role={caseData?.my_role || "viewer"} onChanged={bump} />}
+          {tab === "exports" && <ExportsView caseId={caseId} role={caseData?.my_role || "viewer"} />}
+          {tab === "agent" && <AgentView caseId={caseId} role={caseData?.my_role || "viewer"} />}
+        </Suspense>
       </main>
     </div>
     {showJobs && <div className="jobs-drawer"><div className="jobs-drawer-head"><span>Background processing</span><button className="icon-button" aria-label="Close jobs" onClick={() => setShowJobs(false)}><Icon name="close" /></button></div><JobsPanel jobs={jobs} caseId={caseId} onChanged={refresh} /></div>}

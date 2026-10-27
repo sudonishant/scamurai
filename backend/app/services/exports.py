@@ -332,13 +332,13 @@ def _build_maltego(db: Session, case, export: Export, data: dict) -> bytes:
 
 def _build_lea_dossier(db: Session, case, export: Export, data: dict) -> bytes:
     """Build a formal Law Enforcement / Court-Admissible Forensic Dossier with Section 65B Certificate."""
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.units import cm
-    from reportlab.platypus import (PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle)
     from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import cm
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
     font_name = "Helvetica"
     for candidate in ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",):

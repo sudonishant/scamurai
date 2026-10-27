@@ -19,7 +19,6 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
-    Float,
     String,
     Text,
     UniqueConstraint,

@@ -27,15 +27,21 @@ It is deliberately **an investigation tool, not an accusation engine**:
 | Early warnings | Persistent narrative/geo/coordination/data-gap cues, active history, analyst status/notes, evidence-completeness score, audited review | Attention and evidence-completeness scores are uncalibrated triage aids, not threat/truth probabilities |
 | Media screening | SHA-256, pHash, selected metadata, possible provenance-marker bytes, bounded pixel/JPEG residual measurements | C2PA byte markers are not cryptographic validation; residuals are not manipulation verdicts |
 | Optional synthetic-image model | A configured local Hugging Face image classifier can return raw labels and an uncalibrated label-aggregation score | No score when no model is configured; model/threshold validation is still required |
+| Telegram public preview | Bounded `t.me/s/{channel}` public-web-preview collection, handle-validated (`^[a-zA-Z0-9_]{4,64}$`), no API key | Public web preview only; no private/channel-member content; Telegram ToS and rate limits remain the operator's responsibility; a missing preview is not proof the channel is empty |
+| Video keyframe forensics | ffmpeg-based bounded frame extraction (default ≤15 frames @1fps) with per-frame ELA/spectral screening and temporal reporting | Requires `ffmpeg`; frame-level image screening over time, **not** a video deepfake verdict; unsupported codecs remain unsupported |
+| Advanced image forensics | Multi-channel Error Level Analysis (q95 in-memory recompression) and 2D FFT radial frequency-energy spectrum | ELA residuals vary with source quality, resizing, texture and editing — **no manipulation threshold is asserted**; spectral spikes are a screening cue, not a GAN/diffusion verdict |
+| Investigation exports | Maltego-compatible graph export and an Indian IT Act **Section 65B**-style LEA evidence dossier | Export formatting aids chain-of-custody documentation; it is **not** legal advice and does not by itself make evidence admissible — jurisdiction-specific legal review is required |
 | Existing analysis pipelines | Image matching, comments, coordination candidates, claims, metadata-first location findings, bounded agent, jobs and exports | See method notes and per-result limitations |
 
 ### Not claimed or silently simulated
 
 - There is **no platform-wide firehose or continuous real-time monitor**. Analytics are computed on demand from the currently collected case corpus.
 - There is no built-in deterministic deepfake verdict or calibrated bot/deepfake confidence.
-- Video/deepfake analysis is not implemented merely by running an image classifier. Unsupported media remains unsupported.
+- Video keyframe extraction and per-frame forensic screening IS implemented (InVID/WeVerify-style, requires `ffmpeg` on PATH or `SCAMURAI_FFMPEG_BIN`). It is frame-level image screening over time, NOT a video deepfake verdict — temporal consistency across frames is reported, not a manipulation probability.
 - Instagram/Facebook private or restricted content, Reddit approval-gated access, OCR, and reverse image search are not represented as working when unconfigured.
 - Content Credentials/provenance and content-based synthetic-media detection answer different questions. Absence of either is not evidence of authenticity or manipulation.
+
+> **Legal notice.** The Section 65B-style dossier is a formatting aid for chain-of-custody documentation. Scamurai is not a legal product, this is not legal advice, and generating a dossier does not by itself make any evidence admissible. Section 65B certification requirements (including the accompanying certificate under s.65B(4)) are jurisdiction- and fact-specific — obtain qualified legal review before relying on any export in proceedings. See [docs/LEGAL_DISCLAIMER.md](docs/LEGAL_DISCLAIMER.md).
 
 ## API and access requirements
 
@@ -44,6 +50,8 @@ The same matrix appears in the workspace under **Connectors**. “No API key” 
 | Capability | Access | Actual behavior |
 |---|---|---|
 | Authorized JSON, CSV, text and image imports | **No API key** | User-supplied authorized evidence, not live platform collection |
+| Telegram public channel preview | **No API key** | Real bounded public `t.me/s/` requests; handle-validated; Telegram ToS/rate limits apply |
+| Video keyframe extraction + forensics | **No API key** (needs local `ffmpeg`) | Frame screening only; no video deepfake verdict is produced |
 | DNS, RDAP, web metadata, CT and Wayback | **No API key** | Real bounded public requests; availability and rate limits still apply |
 | Mastodon public hashtag timelines | **Keyless if permitted** | Official instance API, one public page when public preview is allowed |
 | Narratives, network, geo and early warnings | **No API key** | Local analysis of the current case corpus, not a platform firehose |
@@ -53,7 +61,7 @@ The same matrix appears in the workspace under **Connectors**. “No API key” 
 | External LLM for the bounded agent | **Optional API key** | Local deterministic tools need no LLM; Groq/Gemini/OpenRouter need credentials |
 | Synthetic-image classifier | **Local model** | Configure a Hugging Face model and optional dependencies; output is uncalibrated |
 | Instagram, Facebook and Reddit | **Official access** | Reviewed OAuth/permissions or approval required; no unconfigured live success |
-| OCR, reverse image search and video deepfakes | **Not available** | No working configured pipeline; no substitute result is generated |
+| OCR, reverse image search | **Not available** | No working configured pipeline; no substitute result is generated |
 
 ## Investigation UI
 

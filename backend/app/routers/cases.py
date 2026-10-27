@@ -22,9 +22,12 @@ from ..models import (
 )
 from ..policies import clamp_case_limits
 from ..registry import POST
-from ..schemas import CapabilityOut, CaseCreate, CaseOut, InputOut, TextInputCreate, UrlInputCreate, UserOut
+from ..schemas import CapabilityOut, CaseCreate, CaseOut, InputOut, TextInputCreate, UrlInputCreate
 from ..security import (
-    get_current_user, require_case, sanitize_upload_filename, validate_image_signature,
+    get_current_user,
+    require_case,
+    sanitize_upload_filename,
+    validate_image_signature,
 )
 from ..services import connectors, graph, importer, storage
 from ..services.audit import record

@@ -9,10 +9,11 @@ from __future__ import annotations
 from collections.abc import Iterator
 from pathlib import Path
 
-from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+
+from alembic import command
 
 from .config import get_settings
 

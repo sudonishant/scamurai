@@ -24,6 +24,20 @@ export default defineConfig({
     proxy: apiProxy,
   },
   build: {
-    chunkSizeWarningLimit: 900,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("node_modules/cytoscape")) {
+            return "cytoscape";
+          }
+          if (id.includes("node_modules/d3-geo") || id.includes("node_modules/topojson-client") || id.includes("node_modules/world-atlas")) {
+            return "geo";
+          }
+          if (id.includes("node_modules/react") || id.includes("node_modules/react-dom")) {
+            return "react";
+          }
+        },
+      },
+    },
   },
 });

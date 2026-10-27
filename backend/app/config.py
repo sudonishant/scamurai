@@ -69,6 +69,7 @@ class Settings(BaseSettings):
     # score is produced; deterministic metadata/forensic indicators still run.
     deepfake_model_id: str | None = None
     deepfake_model_revision: str | None = None
+    ffmpeg_bin: str | None = None
 
     # Bounded passive OSINT sources. No port scanning or credential discovery.
     osint_timeout_seconds: float = 12.0

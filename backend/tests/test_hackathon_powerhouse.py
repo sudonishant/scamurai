@@ -1,15 +1,15 @@
-import io
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from PIL import Image
 
-from app.models import Export, Post, CoordinationCandidate, Account
-from app.services.media_forensics import pixel_indicators, analyze_video_keyframes
-from app.services.coordination import _compute_qut_coortweet_sync
-from app.services.osint import extract_iocs_from_text
-from app.services.exports import _build_maltego, _build_lea_dossier
-from app.services.providers.telegram import parse_telegram_preview_html, clean_channel_name
+from app.models import Account, CoordinationCandidate, Export, Post
 from app.services.analytics import _automation_indicators
+from app.services.coordination import _compute_qut_coortweet_sync
+from app.services.exports import _build_lea_dossier, _build_maltego
+from app.services.media_forensics import pixel_indicators
+from app.services.osint import extract_iocs_from_text
+from app.services.providers.telegram import clean_channel_name, parse_telegram_preview_html
 
 
 def test_invid_ela_and_sentinel_fft_forensics():
@@ -32,8 +32,8 @@ def test_invid_ela_and_sentinel_fft_forensics():
 
 
 def test_qut_cnt_and_coortweet_coordination():
-    t0 = datetime(2026, 10, 27, 10, 0, 0, tzinfo=timezone.utc)
-    t1 = datetime(2026, 10, 27, 10, 0, 15, tzinfo=timezone.utc)  # 15s gap
+    t0 = datetime(2026, 10, 27, 10, 0, 0, tzinfo=UTC)
+    t1 = datetime(2026, 10, 27, 10, 0, 15, tzinfo=UTC)  # 15s gap
 
     p1 = Post(id="p1", account_id="acc_a", raw_text="breaking news #alert", timestamp=t0)
     p2 = Post(id="p2", account_id="acc_b", raw_text="breaking news #alert", timestamp=t1)
@@ -69,7 +69,7 @@ def test_maltego_export_generation():
         case_id="case-001",
         account_id="user_alpha",
         raw_text="Fraud syndicate using UPI fraud@paytm and BTC 1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2",
-        timestamp=datetime.now(timezone.utc)
+        timestamp=datetime.now(UTC)
     )
     candidate = CoordinationCandidate(
         id="cand-01",
@@ -143,7 +143,7 @@ def test_lea_section_65b_dossier():
         case_id="case-001",
         account_id="operative_x",
         raw_text="Payment link upi: scam@paytm and BTC 1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2",
-        timestamp=datetime.now(timezone.utc)
+        timestamp=datetime.now(UTC)
     )
 
     data = {
@@ -176,7 +176,7 @@ def test_cyabra_bot_radar():
     posts = [
         Post(id=f"p_{i}", account_id="bot_farm_01", normalized_text="identical propaganda text",
              raw_text="identical propaganda text",
-             timestamp=datetime(2026, 10, 20 + (i // 24), i % 24, 0, 0, tzinfo=timezone.utc))
+             timestamp=datetime(2026, 10, 20 + (i // 24), i % 24, 0, 0, tzinfo=UTC))
         for i in range(30)
     ]
 

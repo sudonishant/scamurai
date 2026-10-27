@@ -26,67 +26,67 @@ def search(q: str = Query(min_length=2, max_length=200),
     pattern = _pattern(query)
     groups = []
 
-    rows = db.scalars(select(Account).where(
+    account_rows = db.scalars(select(Account).where(
         Account.case_id == ctx.case.id,
         (Account.handle.ilike(pattern, escape="\\")) |
         (Account.display_name.ilike(pattern, escape="\\")) |
         (Account.platform.ilike(pattern, escape="\\")),
     ).order_by(Account.handle).limit(12)).all()
-    if rows:
+    if account_rows:
         groups.append({"type": "accounts", "items": [{
             "id": row.id, "title": f"@{row.handle}",
             "snippet": f"{row.platform} · {row.display_name or 'No display name'}",
             "target": {"tab": "accounts", "account": row.id},
-        } for row in rows]})
+        } for row in account_rows]})
 
-    rows = db.scalars(select(Post).where(
+    post_rows = db.scalars(select(Post).where(
         Post.case_id == ctx.case.id,
         (Post.raw_text.ilike(pattern, escape="\\")) |
         (Post.canonical_url.ilike(pattern, escape="\\")) |
         (Post.source_id.ilike(pattern, escape="\\")),
     ).order_by(Post.created_at.desc()).limit(12)).all()
-    if rows:
+    if post_rows:
         groups.append({"type": "posts", "items": [{
             "id": row.id, "title": row.source_id or "Collected post",
             "snippet": row.raw_text[:260] or row.canonical_url or "No text",
             "target": {"tab": "narratives", "post": row.id},
-        } for row in rows]})
+        } for row in post_rows]})
 
-    rows = db.scalars(select(Alert).where(
+    alert_rows = db.scalars(select(Alert).where(
         Alert.case_id == ctx.case.id,
         (Alert.title.ilike(pattern, escape="\\")) | (Alert.rule.ilike(pattern, escape="\\")),
     ).order_by(Alert.last_seen_at.desc()).limit(12)).all()
-    if rows:
+    if alert_rows:
         groups.append({"type": "alerts", "items": [{
             "id": row.id, "title": row.title,
             "snippet": f"{row.severity} · {row.status} · {row.rule[:180]}",
             "target": {"tab": "alerts", "alert": row.id},
-        } for row in rows]})
+        } for row in alert_rows]})
 
-    rows = db.scalars(select(Finding).where(
+    finding_rows = db.scalars(select(Finding).where(
         Finding.case_id == ctx.case.id,
         (Finding.question.ilike(pattern, escape="\\")) |
         (Finding.conclusion_category.ilike(pattern, escape="\\")),
     ).order_by(Finding.created_at.desc()).limit(12)).all()
-    if rows:
+    if finding_rows:
         groups.append({"type": "findings", "items": [{
             "id": row.id, "title": row.conclusion_category.replace("_", " "),
             "snippet": row.question[:260],
             "target": {"tab": "findings", "finding": row.id},
-        } for row in rows]})
+        } for row in finding_rows]})
 
-    rows = db.scalars(select(EvidenceRecord).where(
+    evidence_rows = db.scalars(select(EvidenceRecord).where(
         EvidenceRecord.case_id == ctx.case.id,
         (EvidenceRecord.source_url.ilike(pattern, escape="\\")) |
         (EvidenceRecord.method.ilike(pattern, escape="\\")) |
         (EvidenceRecord.object_hash.ilike(pattern, escape="\\")),
     ).order_by(EvidenceRecord.created_at.desc()).limit(12)).all()
-    if rows:
+    if evidence_rows:
         groups.append({"type": "evidence", "items": [{
             "id": row.id, "title": row.source_kind or "Evidence record",
             "snippet": f"{row.method} · {row.source_url or row.object_hash or 'no external URL'}",
             "target": {"tab": "graph", "evidence": row.id},
-        } for row in rows]})
+        } for row in evidence_rows]})
 
     return {
         "query": query,

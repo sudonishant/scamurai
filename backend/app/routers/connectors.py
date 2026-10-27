@@ -145,7 +145,7 @@ def telegram_import(body: TelegramImport,
             case_id=ctx.case.id, provider=f"telegram:{body.channel}", method="web.preview",
             capability="public_channel:read", outcome=exc.outcome, detail=exc.detail))
         db.commit()
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"{exc.outcome}: {exc.detail}")
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"{exc.outcome}: {exc.detail}") from exc
 
     raw = json.dumps(result, ensure_ascii=False).encode("utf-8")
     evidence = EvidenceRecord(

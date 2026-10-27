@@ -62,10 +62,14 @@ def seed_users() -> None:
 
 
 def create_app() -> FastAPI:
+    production = settings.environment.strip().lower() in {"production", "prod"}
     app = FastAPI(
         title="Scamurai Coordinated Disinformation Detection System",
         version=__version__,
         summary="Evidence-first Maltego-style investigation workspace (import-first build).",
+        docs_url=None if production else "/docs",
+        redoc_url=None if production else "/redoc",
+        openapi_url=None if production else "/openapi.json",
     )
     app.add_middleware(
         CORSMiddleware,

@@ -183,6 +183,8 @@ def _run_safely(job_id: str, kind: str) -> None:
         try:
             result = resolve_task(job)(ctx) or {}
             job = db.get(Job, job_id)
+            if job is None:
+                return
             job.counts = json.dumps({**ctx.counts, **result.get("counts", {})})
             job.limitations = json.dumps(ctx.limitations + result.get("limitations", []))
             job.warnings = json.dumps(ctx.warnings + result.get("warnings", []))
@@ -197,6 +199,8 @@ def _run_safely(job_id: str, kind: str) -> None:
         except CancelledError:
             db.rollback()
             job = db.get(Job, job_id)
+            if job is None:
+                return
             job.lifecycle = "cancelled"
             job.ended_at = utcnow()
             job.limitations = json.dumps(ctx.limitations)
@@ -251,8 +255,8 @@ def reconcile_orphans() -> None:
 
 
 def read_events(db: Session, job_id: str, after_seq: int = 0) -> list[JobEvent]:
-    return db.scalars(
+    return list(db.scalars(
         select(JobEvent)
         .where(JobEvent.job_id == job_id, JobEvent.seq > after_seq)
         .order_by(JobEvent.seq)
-    ).all()
+    ).all())

@@ -68,6 +68,19 @@ jobs:
         working-directory: backend
         run: python scripts/evaluate_multilingual.py --output "$RUNNER_TEMP/scamurai-multilingual-evaluation.json"
 
+      - name: Fixture evaluation harness
+        working-directory: backend
+        run: |
+          python scripts/evaluate.py
+          python scripts/evaluate.py | grep -q "fixture label recall: 5/5"
+
+      - name: Verify committed OpenAPI contract is current
+        working-directory: backend
+        run: |
+          python -c "import json;from app.main import app;json.dump(app.openapi(),open('/tmp/openapi.json','w'),indent=2,sort_keys=True)"
+          git diff --no-index --exit-code ../docs/openapi.json /tmp/openapi.json || \
+            { echo "::error::API contract drift — regenerate docs/openapi.json"; exit 1; }
+
       - name: Validate experiment notebook structure
         run: |
           python - <<'PY'
