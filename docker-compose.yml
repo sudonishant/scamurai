@@ -1,79 +1,118 @@
-# Scamurai full stack — distinct responsibilities per the master prompt.
-# Local dev without Docker works too: SQLite + local storage + in-process runner.
+# Runnable local integration stack: PostgreSQL + Redis/Celery + MinIO/S3.
+# Defaults are development-only. See docs/DEPLOYMENT.md for production OIDC/secrets.
+x-backend-environment: &backend-environment
+  SCAMURAI_ENVIRONMENT: development
+  SCAMURAI_DEV_AUTH_ENABLED: "true"
+  SCAMURAI_DATABASE_URL: postgresql+psycopg://scamurai:${POSTGRES_PASSWORD:-scamurai-dev-password}@db:5432/scamurai
+  SCAMURAI_REDIS_URL: redis://redis:6379/0
+  SCAMURAI_STORAGE_BACKEND: s3
+  SCAMURAI_S3_ENDPOINT: http://minio:9000
+  SCAMURAI_S3_BUCKET: ${SCAMURAI_S3_BUCKET:-scamurai-private}
+  SCAMURAI_S3_REGION: ${SCAMURAI_S3_REGION:-us-east-1}
+  SCAMURAI_S3_ACCESS_KEY: ${MINIO_ROOT_USER:-scamurai-minio}
+  SCAMURAI_S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-scamurai-minio-password}
+  SCAMURAI_S3_FORCE_PATH_STYLE: "true"
+  SCAMURAI_CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+  SCAMURAI_GEO_MIN_GROUP_SIZE: "3"
+
 services:
   db:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: scamurai
-      POSTGRES_PASSWORD: scamurai-dev-password
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-scamurai-dev-password}
       POSTGRES_DB: scamurai
-    ports: ["5432:5432"]
     volumes: ["pgdata:/var/lib/postgresql/data"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U scamurai"]
       interval: 5s
       timeout: 3s
-      retries: 10
+      retries: 20
 
   redis:
     image: redis:7-alpine
-    command: ["redis-server", "--appendonly", "yes"]  # durable broker storage
-    ports: ["6379:6379"]
+    command: ["redis-server", "--appendonly", "yes"]
     volumes: ["redisdata:/data"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   minio:
-    image: minio/minio:latest
+    # Public multi-architecture build; digest verified on 2026-10-24.
+    image: cgr.dev/chainguard/minio:latest@sha256:73297936408b731668ca0e835ac9add1a35cb6026a125c2f0cd476d9ef48222c
+    # The former development image also ran as root. Preserve compatibility with
+    # its root-owned named volumes; production should use non-root volume init.
+    user: "0:0"
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: scamurai-minio
-      MINIO_ROOT_PASSWORD: scamurai-minio-password
-    ports: ["9000:9000", "9001:9001"]
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-scamurai-minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-scamurai-minio-password}
+    ports: ["127.0.0.1:9000:9000", "127.0.0.1:9001:9001"]
     volumes: ["miniodata:/data"]
+
+  minio-init:
+    # The -dev variant supplies the shell required by this bucket bootstrap.
+    image: cgr.dev/chainguard/minio-client:latest-dev@sha256:3f349bd07076e8e4040dc5c32598b632268accba8ac7f460cb077670ee2e3407
+    depends_on:
+      minio: { condition: service_started }
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-scamurai-minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-scamurai-minio-password}
+      SCAMURAI_S3_BUCKET: ${SCAMURAI_S3_BUCKET:-scamurai-private}
+      MC_CONFIG_DIR: /tmp/scamurai-mc
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        until /usr/bin/mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}" && /usr/bin/mc ready local; do
+          sleep 2
+        done
+        /usr/bin/mc mb --ignore-existing "local/$${SCAMURAI_S3_BUCKET}"
+        /usr/bin/mc anonymous set none "local/$${SCAMURAI_S3_BUCKET}"
 
   migrate:
     build: ./backend
-    environment:
-      SCAMURAI_DATABASE_URL: postgresql+psycopg://scamurai:scamurai-dev-password@db:5432/scamurai
+    environment: *backend-environment
     depends_on:
       db: { condition: service_healthy }
     command: alembic upgrade head
+    healthcheck: { disable: true }
 
   api:
     build: ./backend
-    environment:
-      SCAMURAI_DATABASE_URL: postgresql+psycopg://scamurai:scamurai-dev-password@db:5432/scamurai
-      SCAMURAI_REDIS_URL: redis://redis:6379/0
-      SCAMURAI_S3_ENDPOINT: http://minio:9000
-      SCAMURAI_STORAGE_DIR: /data/storage
+    environment: *backend-environment
     ports: ["8000:8000"]
     depends_on:
-      db: { condition: service_healthy }
       migrate: { condition: service_completed_successfully }
-      redis: { condition: service_started }
-    volumes: ["storagedata:/data/storage"]
+      redis: { condition: service_healthy }
+      minio-init: { condition: service_completed_successfully }
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
 
   worker:
     build: ./backend
-    environment:
-      SCAMURAI_DATABASE_URL: postgresql+psycopg://scamurai:scamurai-dev-password@db:5432/scamurai
-      SCAMURAI_REDIS_URL: redis://redis:6379/0
-      SCAMURAI_STORAGE_DIR: /data/storage
+    environment: *backend-environment
     depends_on:
-      db: { condition: service_healthy }
       migrate: { condition: service_completed_successfully }
-      redis: { condition: service_started }
-    volumes: ["storagedata:/data/storage"]
-    # Celery path requires: pip install celery[redis] psycopg[binary] boto3
-    command: celery -A worker.celery_app worker --loglevel=INFO --concurrency=2
+      redis: { condition: service_healthy }
+      minio-init: { condition: service_completed_successfully }
+    command: celery -A worker.celery_app worker --loglevel=INFO --queues=scamurai --concurrency=2
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A worker.celery_app inspect ping --timeout=5 | grep -q pong"]
+      interval: 30s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
 
   frontend:
     build: ./frontend
     ports: ["5173:80"]
-    depends_on: [api]
+    depends_on:
+      api: { condition: service_healthy }
 
 volumes:
   pgdata:
   redisdata:
   miniodata:
-  storagedata:

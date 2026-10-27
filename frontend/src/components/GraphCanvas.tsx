@@ -32,7 +32,6 @@ interface Props {
 export default function GraphCanvas({ data, onSelectNode, onSelectEdge, refreshToken }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
-  const [showRelationships, setShowRelationships] = useState(false);
   const onSelectNodeRef = useRef(onSelectNode);
   const onSelectEdgeRef = useRef(onSelectEdge);
   onSelectNodeRef.current = onSelectNode;

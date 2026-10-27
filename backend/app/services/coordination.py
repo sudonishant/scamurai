@@ -14,15 +14,19 @@ from __future__ import annotations
 import json
 import re
 from collections import defaultdict
+from difflib import SequenceMatcher
 from itertools import combinations
 
-from difflib import SequenceMatcher
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..config import get_settings
 from ..models import (
-    Account, CoordinationCandidate, GraphEdge, GraphNode, Post,
+    Account,
+    CoordinationCandidate,
+    GraphEdge,
+    GraphNode,
+    Post,
 )
 from ..registry import ACCOUNT, COORDINATION, MEDIA, POST
 from . import graph

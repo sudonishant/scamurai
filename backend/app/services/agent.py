@@ -144,7 +144,7 @@ class BoundedAgent:
                 self.steps.append(AgentStep(seq, call.tool, call.arguments, False,
                                             reason, [], str(exc)))
                 return self._stop(reason)
-            except Exception as exc:  # noqa: BLE001 — agent boundary
+            except Exception as exc:
                 self.steps.append(AgentStep(seq, call.tool, call.arguments, False,
                                             "tool_error", [], str(exc)))
                 return self._stop("tool_error")

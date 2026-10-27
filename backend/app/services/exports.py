@@ -22,8 +22,15 @@ from sqlalchemy.orm import Session
 
 from ..config import get_settings
 from ..models import (
-    Comment, CommentAnalysis, CoordinationCandidate, Export, Finding,
-    MediaAsset, Post, SourceAccess, utcnow,
+    Comment,
+    CommentAnalysis,
+    CoordinationCandidate,
+    Export,
+    Finding,
+    MediaAsset,
+    Post,
+    SourceAccess,
+    utcnow,
 )
 from ..security import csv_safe, mask_identifier, safe_html
 from . import storage
@@ -210,11 +217,11 @@ def _build_html(db: Session, case, export: Export, data: dict) -> bytes:
 # --------------------------------------------------------------------- PDF
 def _build_pdf(db: Session, case, export: Export, data: dict) -> bytes:
     from reportlab.lib.pagesizes import A4
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.lib.units import cm
-    from reportlab.platypus import (PageBreak, Paragraph, SimpleDocTemplate, Spacer)
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
+    from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer
 
     font_name = "Helvetica"
     for candidate in ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",):

@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import Icon from "./components/Icon";
 import MatrixBackdrop from "./components/MatrixBackdrop";
-import { api, ApiError, clearSession, getApiUrl, getToken, setApiUrl, setToken, UNAUTHORIZED_EVENT } from "./lib/api";
+import { api, ApiError, clearSession, getApiUrl, getToken, isSandboxActive, setApiUrl, setToken, UNAUTHORIZED_EVENT } from "./lib/api";
 import "@fontsource/jetbrains-mono/latin-400.css";
 import "@fontsource/jetbrains-mono/latin-500.css";
 import "@fontsource/jetbrains-mono/latin-600.css";
@@ -89,7 +89,7 @@ function Login({ onAuth }: { onAuth: () => void }) {
                 <span><b>{role.name}</b><small>{role.detail}</small></span><Icon name="arrow" size={15} />
               </button>
             ))}</div>
-            <p className="auth-note"><Icon name="info" size={14} /> Live API only. No synthetic demo, offline evidence fallback or fabricated source result.</p>
+            <p className="auth-note"><Icon name="info" size={14} /> Full investigative workspace with live FastAPI backend or browser sandbox for static GitHub Pages preview.</p>
           </div>
           <div className="login-proof">
             <div><Icon name="database" /><span><b>Evidence preserved</b><small>Hash-snapshotted source observations</small></span></div>
@@ -98,7 +98,7 @@ function Login({ onAuth }: { onAuth: () => void }) {
           </div>
         </div>
       </section>
-      <footer className="login-footer"><span>PUBLIC DATA ONLY</span><span>NO LOGIN BYPASS</span><span>NO SYNTHETIC DEMO</span></footer>
+      <footer className="login-footer"><span>PUBLIC DATA ONLY</span><span>NO LOGIN BYPASS</span><span>{isSandboxActive() ? "SYNTHETIC BROWSER PREVIEW" : "NO DEMO FALLBACK IN LIVE API MODE"}</span></footer>
     </main>
   );
 }

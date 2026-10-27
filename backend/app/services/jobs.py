@@ -18,7 +18,6 @@ from __future__ import annotations
 import json
 import logging
 import time
-from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 
 from sqlalchemy import select
@@ -145,14 +144,35 @@ def create_or_get_job(
     return job, True
 
 
-def submit(job_id: str, task: Callable[[JobContext], dict]) -> None:
-    POOL.submit(_run_safely, job_id, task)
+def submit(job_id: str, kind: str) -> None:
+    """Dispatch through Celery whenever a broker is configured.
+
+    There is deliberately no silent thread-pool fallback: a configured but
+    unavailable broker is surfaced as a failed/retryable job.
+    """
+    if settings.redis_url:
+        try:
+            from worker import celery_app
+            if celery_app is None:
+                raise RuntimeError("Celery is configured but its worker app is unavailable")
+            celery_app.send_task("scamurai.execute_job", args=[job_id, kind], queue="scamurai")
+        except Exception as exc:
+            with SessionLocal() as db:
+                job = db.get(Job, job_id)
+                if job is not None:
+                    _fail(db, job_id, f"Queue dispatch failed: {exc}", True, JobContext(job, db))
+            raise
+        return
+    POOL.submit(_run_safely, job_id, kind)
 
 
-def _run_safely(job_id: str, task: Callable[[JobContext], dict]) -> None:
+def _run_safely(job_id: str, kind: str) -> None:
+    # Imported lazily so connector/CLI modules do not load every pipeline.
+    from .tasks import resolve_task
+
     with SessionLocal() as db:
         job = db.get(Job, job_id)
-        if job is None:
+        if job is None or job.lifecycle in {"completed", "cancelled"}:
             return
         job.lifecycle = "running"
         job.started_at = utcnow()
@@ -161,7 +181,7 @@ def _run_safely(job_id: str, task: Callable[[JobContext], dict]) -> None:
         db.commit()
         ctx = JobContext(job, db)
         try:
-            result = task(ctx) or {}
+            result = resolve_task(job)(ctx) or {}
             job = db.get(Job, job_id)
             job.counts = json.dumps({**ctx.counts, **result.get("counts", {})})
             job.limitations = json.dumps(ctx.limitations + result.get("limitations", []))
@@ -185,7 +205,7 @@ def _run_safely(job_id: str, task: Callable[[JobContext], dict]) -> None:
         except TimeoutError as exc:
             db.rollback()
             _fail(db, job_id, str(exc), retryable=True, ctx=ctx)
-        except Exception as exc:  # noqa: BLE001 — worker boundary must never die silently
+        except Exception as exc:
             log.exception("job %s failed", job_id)
             db.rollback()
             _fail(db, job_id, str(exc), retryable=False, ctx=ctx)
@@ -213,8 +233,13 @@ def request_cancel(db: Session, job: Job) -> None:
 
 
 def reconcile_orphans() -> None:
-    """Crash recovery: orphaned 'running' jobs become failed-partial without
-    re-executing side effects; duplicate-safe workers resume via idempotency."""
+    """Recover only in-process jobs after an API process restart.
+
+    Celery owns queued/running delivery with late acknowledgements; an API
+    restart must not fail jobs that are still waiting for an active worker.
+    """
+    if settings.redis_url:
+        return
     with SessionLocal() as db:
         orphans = db.scalars(select(Job).where(Job.lifecycle.in_(["running", "queued"]))).all()
         for job in orphans:

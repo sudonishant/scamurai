@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, authorizedMediaObjectUrl } from "../lib/api";
+import { api, authorizedMediaObjectUrl, isSandboxActive } from "../lib/api";
 import type { GraphEdge, GraphNode } from "../lib/types";
 
 interface EvidenceMeta {
@@ -17,6 +17,7 @@ export default function EvidenceDrawer(
 ) {
   const [evidence, setEvidence] = useState<EvidenceMeta[]>([]);
   const [failedEvidenceIds, setFailedEvidenceIds] = useState<string[]>([]);
+  const sandboxMode = isSandboxActive();
 
   useEffect(() => {
     let cancelled = false;
@@ -82,9 +83,12 @@ export default function EvidenceDrawer(
               <b>Supporting evidence records</b>
               {evidence.map((item) => (
                 <div key={item.id} className="evidence-chain">
+                  {sandboxMode && <span className="mini-tag case-demo-tag">SYNTHETIC PREVIEW RECORD · NOT EVIDENCE</span>}
                   <div className="mono">{item.id}</div>
                   <div className="muted">{item.method} · {item.source_kind}</div>
-                  {item.source_url && <a href={item.source_url} target="_blank" rel="noreferrer">{item.source_url}</a>}
+                  {item.source_url && (sandboxMode
+                    ? <div className="illustrative-source"><b>ILLUSTRATIVE URL · NOT FETCHED</b><span>{item.source_url}</span></div>
+                    : <><a href={item.source_url} target="_blank" rel="noreferrer">{item.source_url}</a><small className="muted">Source attribution is not proof that the linked claim is true.</small></>)}
                   {item.object_hash && <div className="mono muted">sha256: {item.object_hash.slice(0, 18)}…</div>}
                   {item.note && <div className="muted">{item.note}</div>}
                 </div>

@@ -4,7 +4,10 @@ from __future__ import annotations
 import pytest
 
 from app.services.agent import (
-    BoundedAgent, PolicyViolation, ToolCall, ToolResult,
+    BoundedAgent,
+    PolicyViolation,
+    ToolCall,
+    ToolResult,
 )
 
 

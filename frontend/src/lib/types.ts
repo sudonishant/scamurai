@@ -146,13 +146,46 @@ export interface Narrative {
   top_terms: { term: string; count: number }[];
   bucket_size: string;
   timeline: { bucket: string | null; count: number; evidence_ids: string[] }[];
-  earliest_observed: null | { post_id: string; account_id: string | null; handle: string; url: string | null; observed_at: string | null; scope: string };
+  earliest_observed: null | { post_id: string; account_id: string | null; handle: string; url: string | null; observed_at: string | null; source_timestamp?: string | null; first_seen_at?: string | null; collected_at?: string | null; scope: string };
   propagation: { account_id: string; handle: string; first_observed: string | null; post_id: string; role: string }[];
-  representative_posts: { id: string; text: string; url: string | null; observed_at: string | null; timestamp_precision: string; handle: string }[];
+  representative_posts: { id: string; text: string; url: string | null; observed_at: string | null; source_timestamp?: string | null; first_seen_at?: string | null; collected_at?: string | null; timestamp_precision: string; handle: string }[];
   discourse_assessment: { state: string; interpretation: string };
   early_warning: null | Record<string, any>;
   locations: string[];
   analysis_scope: string;
+}
+
+export interface EvidenceConfidence {
+  score: number | null;
+  level: string;
+  score_type: string;
+  factors?: Record<string, number>;
+  formula?: string;
+  limitations?: string[];
+}
+
+export interface AlertItem {
+  id: string;
+  rule_id?: string;
+  type: string;
+  title: string;
+  severity: string;
+  status: "open" | "acknowledged" | "resolved" | "dismissed" | string;
+  active: boolean;
+  attention_score: number | null;
+  score_type: string;
+  rule: string;
+  narrative_id: string | null;
+  evidence_ids: string[];
+  recommended_action: string;
+  limitations: string[];
+  first_seen_at?: string | null;
+  last_seen_at?: string | null;
+  review_note?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  evidence_confidence?: EvidenceConfidence;
+  [key: string]: any;
 }
 
 export interface AnalyticsData {
@@ -169,18 +202,21 @@ export interface AnalyticsData {
     formula: string; limitations: string[]; evidence_post_ids: string[];
   }[];
   network: {
-    nodes: { account_id: string; handle: string; platform: string; post_count: number; fact_link_degree: number; hypothesis_link_degree: number; observed_link_degree: number; scope: string }[];
+    nodes: { account_id: string; handle: string; platform: string; post_count: number; fact_link_degree: number; hypothesis_link_degree: number; observed_link_degree: number; fact_pagerank?: number | null; fact_betweenness?: number | null; hypothesis_pagerank?: number | null; hypothesis_betweenness?: number | null; bridge_candidate?: boolean; bridge_evidence_classes?: string[]; scope: string }[];
     edges: { source_account_id: string; target_account_id: string; relationship: string; derivation_class: string; statement: string; evidence_ids: string[] }[];
     clusters: { account_ids: string[]; handles: string[]; size: number; fact_links: number; hypothesis_links: number; note: string }[];
+    communities?: { id: string; derivation_class: string; account_ids: string[]; handles: string[]; size: number; algorithm: string; note: string }[];
+    metrics?: { centrality_scope: string; fact_status: string; hypothesis_status: string; fact_betweenness_method: string; hypothesis_betweenness_method: string; bridge_definition: string; cascade_depth: { status: string; reason: string } };
     limitations: string[];
   };
   geospatial: {
     points: { key: string; label: string; latitude: number; longitude: number; count: number; intensity: number; anomaly: boolean }[];
     locations: Record<string, any>[];
     anomalies: Record<string, any>[];
+    privacy?: { minimum_group_size?: number; suppressed_groups?: number; suppressed_observations?: number; basis?: string };
     map_note: string;
   };
-  alerts: Record<string, any>[];
+  alerts: AlertItem[];
   limitations: string[];
 }
 
@@ -235,4 +271,51 @@ export interface MediaForensicsResult {
   model_result: Record<string, any>;
   limitations: string[];
   created_at: string;
+}
+
+export interface AccountSummary {
+  id: string;
+  platform: string;
+  handle: string;
+  display_name: string;
+  canonical_profile_url: string | null;
+  identity_confirmed: boolean;
+  post_count: number;
+  last_source_timestamp: string | null;
+  last_collected_at: string | null;
+}
+
+export interface AccountDetail {
+  account: {
+    id: string; platform: string; platform_id: string | null; handle: string;
+    display_name: string; canonical_profile_url: string | null;
+    observed_handles: string[]; identity_confirmed: boolean; created_at: string;
+  };
+  summary: {
+    post_count: number; timestamped_post_count: number;
+    language_counts: Record<string, number>; domain_counts: Record<string, number>;
+    first_source_timestamp: string | null; last_source_timestamp: string | null;
+    first_seen_at: string | null; last_collected_at: string | null; shared_url_count: number;
+  };
+  behavior: AnalyticsData["automation"][number] | null;
+  network: AnalyticsData["network"]["nodes"][number] | null;
+  shared_urls: { url: string; observed_account_count: number; other_handles: string[]; note: string }[];
+  coordination_candidates: { id: string; review_state: string; episodes: unknown[]; features: Record<string, unknown>; baseline: string; alternatives: string[]; created_at: string }[];
+  posts: { id: string; source_id: string | null; text: string; url: string | null; language: string; source_timestamp: string | null; timestamp_precision: string; first_seen_at: string | null; collected_at: string | null; collection_status: string }[];
+  coverage: { posts_returned: number; posts_total: number; truncated: boolean; analysis_post_cap: number; case_posts: number };
+  limitations: string[];
+}
+
+export interface SearchResult {
+  id: string;
+  title: string;
+  snippet: string;
+  target: { tab: string; account?: string; alert?: string; post?: string; finding?: string; evidence?: string };
+}
+
+export interface SearchResponse {
+  query: string;
+  total: number;
+  groups: { type: string; items: SearchResult[] }[];
+  scope: string;
 }

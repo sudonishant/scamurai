@@ -1,7 +1,6 @@
 """Graph navigation, comparison matrix and transform policy tests."""
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"

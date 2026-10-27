@@ -73,6 +73,7 @@ class InputOut(BaseModel):
     byte_length: int | None
     payload: dict[str, Any]
     source_access: list[dict[str, Any]] = Field(default_factory=list)
+    replayed: bool = False
     created_at: datetime
 
 
@@ -170,6 +171,11 @@ class CommentOut(BaseModel):
 class ReviewCreate(BaseModel):
     decision: Literal["accepted", "rejected", "needs_more_evidence"]
     note: str = ""
+
+
+class AlertReview(BaseModel):
+    status: Literal["open", "acknowledged", "resolved", "dismissed"]
+    note: str = Field(default="", max_length=4000)
 
 
 class FindingOut(BaseModel):

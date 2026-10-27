@@ -11,11 +11,12 @@ Design rules enforced at the data layer:
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import (
     Boolean,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     Float,
@@ -29,7 +30,7 @@ from .database import Base
 
 
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def uuid_pk() -> Mapped[str]:
@@ -46,11 +47,14 @@ class TimestampMixin:
 # --------------------------------------------------------------------------- users / RBAC
 class User(Base, TimestampMixin):
     __tablename__ = "users"
+    __table_args__ = (UniqueConstraint("auth_issuer", "auth_subject", name="uq_user_oidc_subject"),)
     id: Mapped[str] = uuid_pk()
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(255))
-    # Development token only; real deployments use an external IdP.
+    # Development token only; production uses a pre-provisioned OIDC subject.
     dev_token: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
+    auth_issuer: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    auth_subject: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
 
 class Case(Base, TimestampMixin):
@@ -67,7 +71,7 @@ class Case(Base, TimestampMixin):
     schema_version: Mapped[str] = mapped_column(String(40), default="scamurai-0.1")
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
 
-    memberships: Mapped[list["CaseMembership"]] = relationship(cascade="all, delete-orphan")
+    memberships: Mapped[list[CaseMembership]] = relationship(cascade="all, delete-orphan")
 
 
 class CaseMembership(Base):
@@ -141,6 +145,9 @@ class Post(Base, TimestampMixin):
     timestamp: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     timestamp_precision: Mapped[str] = mapped_column(String(20), default="unknown")  # minute|hour|day|unknown
     collection_status: Mapped[str] = mapped_column(String(60), default="imported")
+    # Collection provenance is distinct from the source-authored timestamp.
+    first_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=True)
+    collected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=True)
     __table_args__ = (UniqueConstraint("case_id", "source_id", name="uq_post_source"),)
 
 
@@ -233,6 +240,37 @@ class Finding(Base, TimestampMixin):
     contradictions: Mapped[str] = mapped_column(Text, default="[]")
     analysis_run_id: Mapped[str | None] = mapped_column(ForeignKey("analysis_runs.id"), nullable=True)
     review_status: Mapped[str] = mapped_column(String(40), default="unreviewed")
+    review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reviewed_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class Alert(Base, TimestampMixin):
+    """Materialized review cue with durable analyst workflow state.
+
+    The derived payload can be recomputed; acknowledgement/resolution and its
+    audit trail must survive refreshes and process restarts.
+    """
+    __tablename__ = "alerts"
+    __table_args__ = (UniqueConstraint("case_id", "dedup_key", name="uq_alert_case_dedup"),)
+    id: Mapped[str] = uuid_pk()
+    case_id: Mapped[str] = mapped_column(ForeignKey("cases.id", ondelete="CASCADE"), index=True)
+    dedup_key: Mapped[str] = mapped_column(String(200))
+    alert_type: Mapped[str] = mapped_column("type", String(80), index=True)
+    title: Mapped[str] = mapped_column(Text)
+    severity: Mapped[str] = mapped_column(String(30), index=True)
+    status: Mapped[str] = mapped_column(String(30), default="open", index=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    attention_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    score_type: Mapped[str] = mapped_column(String(80), default="not_applicable")
+    rule: Mapped[str] = mapped_column(Text, default="")
+    narrative_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    evidence_ids: Mapped[str] = mapped_column(Text, default="[]")
+    recommended_action: Mapped[str] = mapped_column(Text, default="")
+    limitations: Mapped[str] = mapped_column(Text, default="[]")
+    payload: Mapped[str] = mapped_column(Text, default="{}")
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     reviewed_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -3,37 +3,39 @@ import StartScreen from "./components/StartScreen";
 import Workspace from "./components/Workspace";
 import Icon from "./components/Icon";
 import MatrixBackdrop from "./components/MatrixBackdrop";
-import { getApiUrl, setApiUrl } from "./lib/api";
+import { getApiUrl, isSandboxActive, setApiUrl } from "./lib/api";
 
 interface Props { onLogout: () => void }
 
 export default function App({ onLogout }: Props) {
   const [openCase, setOpenCase] = useState<string | null>(() => new URLSearchParams(window.location.search).get("case"));
   const [goal, setGoal] = useState("overview");
+
   useEffect(() => {
-    const restoreCase = () => setOpenCase(new URLSearchParams(window.location.search).get("case"));
-    window.addEventListener("popstate", restoreCase);
-    return () => window.removeEventListener("popstate", restoreCase);
+    const restore = () => setOpenCase(new URLSearchParams(window.location.search).get("case"));
+    window.addEventListener("popstate", restore);
+    return () => window.removeEventListener("popstate", restore);
   }, []);
-  const openWorkspace = (id: string, nextGoal: string) => {
+
+  function openInvestigation(id: string, selectedGoal: string) {
     const url = new URL(window.location.href);
     url.searchParams.set("case", id);
-    url.searchParams.delete("tab");
-    window.history.pushState({}, "", url);
-    setGoal(nextGoal);
-    setOpenCase(id);
-  };
-  const goHome = () => {
+    ["tab", "account", "alert", "post", "finding", "evidence"].forEach((key) => url.searchParams.delete(key));
+    window.history.pushState({ caseId: id }, "", url);
+    setGoal(selectedGoal); setOpenCase(id);
+  }
+
+  function goHome() {
     const url = new URL(window.location.href);
-    url.searchParams.delete("case");
-    url.searchParams.delete("tab");
+    ["case", "tab", "account", "alert", "post", "finding", "evidence"].forEach((key) => url.searchParams.delete(key));
     window.history.pushState({}, "", url);
     setOpenCase(null);
-  };
-  if (!openCase) {
-    return <div className="app"><MatrixBackdrop /><TopBar onLogout={onLogout} /><StartScreen onOpen={openWorkspace} /></div>;
   }
-  return <div className="app"><MatrixBackdrop /><TopBar onLogout={onLogout} onHome={goHome} /><Workspace caseId={openCase} initialGoal={goal} /></div>;
+
+  if (!openCase) {
+    return <div className="app"><MatrixBackdrop /><TopBar onLogout={onLogout} onHome={goHome} /><StartScreen onOpen={openInvestigation} /></div>;
+  }
+  return <div className="app"><MatrixBackdrop /><TopBar onLogout={onLogout} onHome={goHome} /><Workspace key={openCase} caseId={openCase} initialGoal={goal} /></div>;
 }
 
 function TopBar({ onLogout, onHome }: { onLogout: () => void; onHome?: () => void }) {
@@ -59,7 +61,7 @@ function TopBar({ onLogout, onHome }: { onLogout: () => void; onHome?: () => voi
       <span className="product-label">OSINT INVESTIGATION LAB</span>
       <span className="spacer" />
       <button className="connection-pill live" onClick={() => setShowConfig(true)}>
-        <span className="live-dot" />{getApiUrl() ? "Remote live API" : "Same-origin live API"}<Icon name="settings" size={14} />
+        <span className={`live-dot ${isSandboxActive() ? "sandbox" : ""}`} />{getApiUrl() ? "Remote live API" : isSandboxActive() ? "Browser sandbox" : "Live API"}<Icon name="settings" size={14} />
       </button>
       {onHome && <button className="icon-button" onClick={onHome} title="All investigations"><Icon name="home" /></button>}
       <button className="btn btn-quiet" onClick={onLogout}><Icon name="logout" size={16} /> Switch role</button>

@@ -82,7 +82,7 @@ def match_imported_factchecks(db: Session, case_id: str) -> dict[str, dict]:
         try:
             payload = json.loads(storage.get_object(record.snapshot_key).decode("utf-8"))
             library.extend(payload.get("factchecks", []))
-        except Exception:  # noqa: BLE001
+        except Exception:
             continue
     matches: dict[str, dict] = {}
     claims = db.scalars(select(Claim).where(Claim.case_id == case_id)).all()

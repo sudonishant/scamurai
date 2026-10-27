@@ -4,12 +4,19 @@ from __future__ import annotations
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import (
-    Account, Comment, CommentAnalysis, EvidenceRecord, Finding, MediaAsset, Post, SourceAccess,
+    Account,
+    Comment,
+    CommentAnalysis,
+    EvidenceRecord,
+    Finding,
+    MediaAsset,
+    Post,
+    SourceAccess,
 )
 from ..schemas import CommentOut, FindingOut, ReviewCreate
 from ..security import require_case
@@ -120,7 +127,7 @@ def case_stats(ctx=Depends(require_case()), db: Session = Depends(get_db)):
     cid = ctx.case.id
     def count(model):
         return db.scalar(select(func.count()).select_from(model).where(
-            getattr(model, "case_id") == cid))
+            model.case_id == cid))
     return {
         "accounts": count(Account),
         "posts": count(Post),

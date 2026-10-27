@@ -18,7 +18,21 @@ from . import __version__
 from .config import get_settings
 from .database import SessionLocal
 from .models import User
-from .routers import agent, analytics, cases, comments, connectors, exports, graph, media, osint, runs
+from .routers import (
+    accounts,
+    agent,
+    alerts,
+    analytics,
+    cases,
+    comments,
+    connectors,
+    exports,
+    graph,
+    media,
+    osint,
+    runs,
+    search,
+)
 from .services.jobs import reconcile_orphans
 
 settings = get_settings()
@@ -77,16 +91,29 @@ def create_app() -> FastAPI:
 
     @app.on_event("startup")
     def _startup():
+        # Production schemas are changed only through reviewed Alembic
+        # revisions. create_all remains a local/test convenience.
+        if settings.environment.strip().lower() not in {"production", "prod"}:
+            init_db()
         seed_users()
         reconcile_orphans()
-        log.info("Scamurai started (env=%s, db=%s, ocr=%s, reverse=%s, llm=%s)",
+        log.info("Scamurai started (env=%s, db=%s, auth=%s, queue=%s, storage=%s)",
                  settings.environment, settings.database_url.split("///")[-1],
-                 settings.ocr_provider or "off", settings.reverse_search_provider or "off",
-                 settings.llm_provider or "off")
+                 "development+oidc" if settings.dev_auth_enabled and settings.oidc_issuer
+                 else ("development" if settings.dev_auth_enabled else "oidc"),
+                 "celery" if settings.redis_url else "in-process",
+                 "s3" if settings.storage_backend == "s3" or settings.s3_endpoint else "local")
 
     @app.get("/health")
     def health():
         return {"status": "ok", "version": __version__,
+                "authentication": {
+                    "development_tokens": settings.dev_auth_enabled,
+                    "oidc_configured": bool(all((settings.oidc_issuer, settings.oidc_audience,
+                                                 settings.oidc_jwks_url))),
+                },
+                "job_runner": "celery" if settings.redis_url else "in-process",
+                "storage_backend": "s3" if settings.storage_backend == "s3" or settings.s3_endpoint else "local",
                 "providers": {"ocr": settings.ocr_provider, "reverse_search": settings.reverse_search_provider,
                               "factcheck": settings.factcheck_provider, "llm": settings.llm_provider}}
 
@@ -103,6 +130,9 @@ def create_app() -> FastAPI:
         }
 
     app.include_router(cases.router)
+    app.include_router(accounts.router)
+    app.include_router(search.router)
+    app.include_router(alerts.router)
     app.include_router(runs.router)
     app.include_router(agent.router)
     app.include_router(graph.router)

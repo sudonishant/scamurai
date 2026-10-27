@@ -13,6 +13,7 @@ kar deta hai.
 cd backend
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+alembic upgrade head
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 # Frontend (doosra terminal)
@@ -46,7 +47,7 @@ Development ke 4 role-based tokens (ye demo mode nahi, local development authent
 
 Token paste karte waqt `dev-token-owner` ya poora `Bearer dev-token-owner` dono chalenge; client prefix normalize karta hai. **Open live workspace** real cases API se token validate karta hai. Invalid token, 401 ya network failure par visible error milta hai—koi demo/offline evidence fallback nahi. GitHub Pages jaise static host par pehle **Live API connection** me separately deployed HTTPS FastAPI URL save karo; backend CORS me UI ka exact origin allow hona chahiye. 401 ke baad configured API URL preserve hota hai.
 
-> Production me ye screen real identity provider (OAuth/SSO) se replace hogi.
+> Production me verified OIDC bearer tokens supported hain, lekin issuer/audience/JWKS configure karke user ko pehle provision karna hota hai. Browser abhi access token paste karta hai; interactive Authorization Code + PKCE/refresh-token login implemented nahi hai. Public rollout se pehle trusted token flow/session gateway aur [`DEPLOYMENT.md`](DEPLOYMENT.md) checklist use karo.
 
 ---
 
@@ -58,12 +59,15 @@ media, Investigate infrastructure**. Existing case ko **Open case** se bhi khola
 1. Goal card click karo → selected goal retain hota hai aur case scope form aata hai
    (title, authorized purpose, languages).
 2. Case banne par grouped investigation workspace khulta hai:
-   - **Monitor** — Overview, Narratives aur Geospatial map/baselines
-   - **Investigate** — Live OSINT, Network & behavior, Evidence graph, Entity explorer, Media lab
+   - **Monitor** — Overview, persistent Alerts, Narratives aur Geospatial map/baselines
+   - **Investigate** — Live OSINT, Accounts, Network & behavior, Evidence graph, Entity explorer, Media lab
    - **Evidence** — Comments, Findings & review, Compare accounts, Exports
    - **System** — Connectors aur bounded Agent
 3. Top bar ka **Collect & run** data intake/workflows kholta hai; **Jobs** progress aur
    failures dikhata hai. Analytics current collected corpus par on-demand refresh hote hain.
+4. Top-bar global search current case ke accounts, posts, findings, alerts aur evidence me bounded
+   grouped results deta hai. Result select karne par focused view aur URL deep link banta hai; reload/back
+   navigation par case, tab aur selected entity restore hote hain. Cross-case global read-all search nahi hai.
 
 ---
 
@@ -125,15 +129,22 @@ Kisi bhi job ko **Cancel** kar sakte ho — collected evidence delete nahi hota.
 
 ## 7. Mission views, findings aur connectors
 
-- **Overview** — coverage, source gaps, narrative pulse aur explainable review cues.
+- **Overview** — coverage, source gaps, narrative pulse aur unresolved explainable review cues.
+- **Alerts** — active/inactive persistent history, evidence IDs, evidence-completeness method aur
+  reviewer/owner notes/status. Resolved/dismissed cue analytics refresh par dobara active nahi hota;
+  har decision audit event me rehta hai.
+- **Accounts** — account inventory, observed handles/platform IDs, behavior indicators, shared URLs aur
+  post-level source/first-seen/collection provenance. Network account click aur global search yahin drill down karte hain.
 - **Narratives** — representative posts, timelines, earliest-in-corpus aur later observed
   amplification. Isse platform-wide origin ya common ownership prove nahi hota.
 - **Geospatial** — bundled offline world map aur supplied/reported locations ke aggregates;
-  exact/live person location nahi.
+  default 3 distinct subjects se chhoti cell suppress hoti hai. Exact supplied point explicitly labelled
+  hai; live/current person location nahi.
 - **Live OSINT** — DNS, RDAP, web, CT aur Wayback modules select karo. Har source ka success,
   empty, partial ya failure alag dikhta hai; saved report ka JSON export available hai.
-- **Network & behavior** — observed fact/hypothesis account links aur transparent behavior
-  formula. Automation indicator ko bot probability mat samjho.
+- **Network & behavior** — observed fact/hypothesis account links, alag centrality/community metrics,
+  bridge candidates aur transparent behavior formula. Metrics observed graph bounded hain; automation
+  indicator ko bot probability ya external reach mat samjho.
 - **Media lab** — authenticated preview, hashes, metadata/pixel observations, model availability
   aur limitations. No model = no synthetic score.
 - **Findings & review** — Established, Signals, Unknowns, Conflicts ke alawa unmatched categories
@@ -172,14 +183,23 @@ Job progress SSE se milta hai: `GET /api/v1/cases/{id}/events` (reconnect `Last-
 ## 9. Testing aur evaluation
 
 ```bash
-make test       # 58 pytest tests — acceptance, security, intelligence, config, providers
-make eval       # fixture-based evaluation harness (label recall, match categories, controls)
+cd backend
+pip install -r requirements-dev.txt
+alembic upgrade head && alembic check
+python -m pytest tests/ -q
+bandit -q -r app -x tests
+pip-audit -r requirements.txt
+python scripts/evaluate.py  # isolated fixture-based harness; live evidence nahi
 
-cd frontend
-npm run build
+cd ../frontend
+npm ci && npm run build
 npx playwright install chromium
-npm run test:e2e  # API :8000 + Vite :5173 pehle start karo; 5 browser checks
+npm run test:e2e  # API :8000 + Vite :5173 aur production build pehle; 10 browser/Pages/accessibility checks
 ```
+
+Point-in-time results [`VALIDATION.md`](VALIDATION.md) me hain. CI migration downgrade/re-upgrade aur
+real disposable PostgreSQL/MinIO/Celery Compose smoke bhi karta hai; local Docker available ho tab hi
+`docs/DEPLOYMENT.md` ka smoke manually run karo.
 
 ## 10. Yaad rakhne wali limitations (honest by design)
 
@@ -190,5 +210,6 @@ npm run test:e2e  # API :8000 + Vite :5173 pehle start karo; 5 browser checks
   Bot/deepfake probability, video deepfake verdict ya common-owner attribution invent nahi hota.
 - Comment classifier transparent but **uncalibrated** hai — production accuracy claim se pehle
   representative Hindi/Hinglish labeled data par precision/recall/calibration maapo.
-- Dev tokens real auth nahi; deployment se pehle IdP, TLS, DPDP/legal review zaroori.
+- Dev tokens production auth nahi. Production OIDC verification implemented hai, lekin IdP config,
+  explicit user provisioning, safe browser token flow, TLS, DPDP/legal review aur operational controls phir bhi zaroori hain.
 - Export PDFs integrity evidence hain, court-certified evidence nahi.

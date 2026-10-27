@@ -10,16 +10,27 @@ import csv
 import hashlib
 import io
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models import (
-    Account, Comment, EvidenceRecord, GeoObservation, MediaAsset, Post, SourceAccess, utcnow,
+    Account,
+    Comment,
+    EvidenceRecord,
+    GeoObservation,
+    MediaAsset,
+    Post,
+    SourceAccess,
+    utcnow,
 )
 from ..registry import (
-    ACCOUNT, COMMENT, EVIDENCE, MEDIA, POST,
+    ACCOUNT,
+    COMMENT,
+    EVIDENCE,
+    MEDIA,
+    POST,
 )
 from ..security import sanitize_upload_filename, validate_image_signature
 from . import graph, images, storage
@@ -32,7 +43,7 @@ def _parse_ts(value: str | None, precision: str | None) -> tuple[datetime | None
     try:
         dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(tzinfo=UTC)
         return dt, precision or ("day" if len(value) <= 10 else "minute")
     except (ValueError, AttributeError):
         return None, "unknown"
@@ -103,7 +114,12 @@ def import_posts_bundle(db: Session, case_id: str, actor_id: str, payload: dict,
         existing = db.scalar(select(Post).where(
             Post.case_id == case_id, Post.source_id == row["source_id"]))
         if existing:
-            continue  # duplicate-safe re-import
+            # Duplicate-safe re-import still records the latest collection
+            # contact without moving the original first-seen timestamp.
+            existing.collected_at = utcnow()
+            if existing.first_seen_at is None:
+                existing.first_seen_at = existing.created_at
+            continue
         ts, precision = _parse_ts(row.get("timestamp"), row.get("timestamp_precision"))
         account = accounts.get(row.get("account_handle"))
         post = Post(

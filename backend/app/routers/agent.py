@@ -18,7 +18,6 @@ from ..schemas import JobOut
 from ..security import get_current_user, require_case
 from ..services.agent import BoundedAgent, ToolCall, ToolResult
 from ..services.jobs import create_or_get_job, submit
-from ..services import pipeline
 
 router = APIRouter(prefix="/api/v1/cases/{case_id}", tags=["agent"])
 
@@ -63,7 +62,7 @@ def run_agent(body: AgentRunRequest,
             parameters={"via": "bounded_agent", "tool": call.tool},
             client_idempotency_key=f"{body.client_idempotency_key}:{workflow}")
         if created:
-            submit(job.id, pipeline.WORKFLOWS[workflow])
+            submit(job.id, job.kind)
         enqueued.append(job)
         return ToolResult(ok=True, output={"job_id": job.id, "workflow": workflow})
 

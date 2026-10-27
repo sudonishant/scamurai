@@ -50,7 +50,7 @@ def _gemini(url: str, payload: dict, timeout: float,
             resp = client.post(
                 f"{url}?key={settings.gemini_api_key}", json=payload)
         except httpx.HTTPError as exc:
-            raise LLMUnavailable(f"Gemini transport failure: {type(exc).__name__}")
+            raise LLMUnavailable(f"Gemini transport failure: {type(exc).__name__}") from exc
     finally:
         if owns:
             client.close()
@@ -71,7 +71,7 @@ def _openai_compatible(url: str, payload: dict, timeout: float,
         try:
             resp = client.post(url, json=payload, headers=headers)
         except httpx.HTTPError as exc:
-            raise LLMUnavailable(f"LLM transport failure: {type(exc).__name__}")
+            raise LLMUnavailable(f"LLM transport failure: {type(exc).__name__}") from exc
     finally:
         if owns:
             client.close()

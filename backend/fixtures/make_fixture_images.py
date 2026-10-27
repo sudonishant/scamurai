@@ -14,7 +14,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from PIL import Image, ExifTags, ImageDraw
+from PIL import ExifTags, Image, ImageDraw
 from PIL.TiffImagePlugin import IFDRational
 
 OUT = Path(__file__).parent / "images"

@@ -14,17 +14,23 @@ from PIL import Image
 from sqlalchemy import select
 
 from ..models import (
-    AnalysisRun, Case, Comment, CoordinationCandidate, EvidenceRecord,
-    Input, MediaAsset, SourceAccess, utcnow,
+    AnalysisRun,
+    Case,
+    Comment,
+    CoordinationCandidate,
+    EvidenceRecord,
+    Input,
+    MediaAsset,
+    SourceAccess,
+    utcnow,
 )
 from ..registry import MEDIA
 from . import claims as claims_svc
 from . import comments as comments_svc
-from . import connectors, coordination, images, location
+from . import connectors, coordination, graph, images, location, storage
 from . import media_forensics as media_forensics_svc
-from . import storage, graph
-from .jobs import JobContext
 from .findings import create_finding
+from .jobs import JobContext
 
 TOOL_VERSION = "scamurai-local-v0.1"
 

@@ -10,15 +10,23 @@ import unicodedata
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 _TRACKING_PREFIXES = ("utm_", "fbclid", "gclid", "mc_eid", "igshid", "ref", "ref_src", "spm")
-_PUNCT_RE = re.compile(r"[^\w\s]", flags=re.UNICODE)
 _SPACE_RE = re.compile(r"\s+")
 
 
 def normalize_text(text: str) -> str:
+    r"""Normalize without deleting combining marks used by Indic/other scripts.
+
+    Python's Unicode ``\w`` does not include combining marks. A negated-\w
+    punctuation regex therefore corrupts text such as ``बाढ़`` and ``पुल``.
+    Preserve letters/numbers and all Unicode mark categories instead.
+    """
     if not text:
         return ""
-    text = unicodedata.normalize("NFKC", text).lower()
-    text = _PUNCT_RE.sub(" ", text)
+    text = unicodedata.normalize("NFKC", text).casefold()
+    text = "".join(
+        char if char.isalnum() or unicodedata.category(char).startswith("M") else " "
+        for char in text
+    )
     return _SPACE_RE.sub(" ", text).strip()
 
 

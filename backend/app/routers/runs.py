@@ -12,15 +12,16 @@ from sqlalchemy.orm import Session
 
 from ..config import get_settings
 from ..database import SessionLocal, get_db
-from ..models import Comment, Input, Job
-from ..policies import clamp_run_limits
+from ..models import Job
 from ..registry import TRANSFORMS
 from ..schemas import JobOut, RunCreate, TransformCreate
 from ..security import require_case
-from ..services import comments as comments_svc
 from ..services import pipeline
 from ..services.jobs import (
-    create_or_get_job, read_events, request_cancel, submit,
+    create_or_get_job,
+    read_events,
+    request_cancel,
+    submit,
 )
 
 router = APIRouter(prefix="/api/v1/cases/{case_id}", tags=["runs"])
@@ -67,8 +68,8 @@ def create_run(body: RunCreate, ctx=Depends(require_case({"analyst", "owner"})),
                     "allowed_provider_ids": body.allowed_provider_ids},
         client_idempotency_key=body.client_idempotency_key, run_id=run_id)
     if created:
-        submit(job.id, pipeline.WORKFLOWS[body.workflow])
-    return {"run_id": job.run_id, "job_id": job.id, "replayed": not created}
+        submit(job.id, job.kind)
+    return {"run_id": run_id, "job_id": job.id, "replayed": not created}
 
 
 @router.get("/jobs/{job_id}", response_model=JobOut)
@@ -135,37 +136,6 @@ async def stream_events(ctx=Depends(require_case()),
 
 
 # --------------------------------------------------------------------- transforms
-def _transform_task(spec_name: str, entity_type: str, entity_id: str, parameters: dict):
-    def task(job_ctx):
-        db = job_ctx.db
-        if spec_name in ("extract_ocr", "reverse_image_search"):
-            return {"outcome": "insufficient_evidence",
-                    "limitations": [f"{spec_name} is disabled: no approved provider configured. "
-                                    "Mocks are never presented as real evidence."]}
-        if spec_name in ("import_comments", "import_authorized_posts"):
-            return {"outcome": "insufficient_evidence",
-                    "limitations": ["Use authorized CSV/JSON upload for this account/post; "
-                                    "no live platform connector is configured."]}
-        if spec_name == "analyze_comment":
-            comment = db.get(Comment, entity_id)
-            if comment is None or comment.case_id != job_ctx.case_id:
-                raise HTTPException(404, "Comment not in case")
-            record = comments_svc.analyze_and_store(db, job_ctx.case_id, entity_id)
-            return {"counts": {"categories": len(json.loads(record.categories))},
-                    "outcome": "complete"}
-        if spec_name in ("find_exact_duplicates", "find_visual_variants"):
-            return pipeline.image_matching(job_ctx)
-        if spec_name == "compute_coordination_features":
-            return pipeline.coordination_detection(job_ctx)
-        if spec_name in ("extract_claims", "plan_claim_searches"):
-            return pipeline.claim_workflow(job_ctx)
-        if spec_name == "estimate_capture_location":
-            return pipeline.location_analysis(job_ctx)
-        return {"outcome": "insufficient_evidence",
-                "limitations": [f"Transform {spec_name} has no local implementation"]}
-    return task
-
-
 @router.post("/transforms", status_code=202)
 def run_transform(body: TransformCreate,
                   ctx=Depends(require_case({"analyst", "owner"})),
@@ -181,8 +151,7 @@ def run_transform(body: TransformCreate,
         parameters={"entity": body.entity_id, "parameters": body.parameters},
         client_idempotency_key=body.client_idempotency_key)
     if created:
-        submit(job.id, _transform_task(body.transform, body.entity_type,
-                                       body.entity_id, body.parameters))
+        submit(job.id, job.kind)
     return {"job_id": job.id, "transform": body.transform,
             "provider_warning": "external provider required" if spec.needs_external else "local",
             "replayed": not created}

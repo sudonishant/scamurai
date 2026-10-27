@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -11,7 +11,14 @@ from sqlalchemy.orm import Session
 from ..config import get_settings
 from ..database import get_db
 from ..models import (
-    AuditEvent, Case, CaseMembership, EvidenceRecord, Input, Post, SourceAccess, User,
+    AuditEvent,
+    Case,
+    CaseMembership,
+    EvidenceRecord,
+    Input,
+    Post,
+    SourceAccess,
+    User,
 )
 from ..policies import clamp_case_limits
 from ..registry import POST
@@ -37,10 +44,13 @@ def _serialize_case(case: Case, role: str) -> CaseOut:
     )
 
 
-@router.get("/users", response_model=list[UserOut])
-def list_users(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
-    return [{"id": u.id, "email": u.email, "name": u.name}
-            for u in db.scalars(select(User)).all()]
+@router.get("/users", response_model=list[dict])
+def list_users(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    # The development role picker is never a production user directory.
+    rows = db.scalars(select(User)).all() if settings.dev_auth_enabled else [user]
+    return [{"id": row.id, "email": row.email, "name": row.name,
+             "token_hint": row.dev_token if settings.dev_auth_enabled else None}
+            for row in rows]
 
 
 @router.post("/cases", response_model=CaseOut, status_code=201)
@@ -147,6 +157,7 @@ def create_input(body: UrlInputCreate | TextInputCreate,
 
 @router.post("/cases/{case_id}/uploads", response_model=InputOut, status_code=201)
 async def upload(
+    response: Response,
     ctx=Depends(require_case({"analyst", "owner"})),
     file: UploadFile = File(...),
     kind: str = Form(...),  # image | csv | json
@@ -156,19 +167,13 @@ async def upload(
     raw = await file.read()
     if len(raw) > settings.max_upload_bytes:
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Upload exceeds case limit")
-    if kind not in {"image", "csv", "json"}:
-        raise HTTPException(422, "Unsupported upload kind")
-    filename = sanitize_upload_filename(file.filename)
-    content_digest = storage.sha256_hex(raw)
-    request_digest = storage.sha256_hex(
-        "\0".join((kind, content_digest, filename, meta)).encode("utf-8"))
-    idempotency_key = f"upload:v1:{request_digest}"
+    idempotency_key = f"upload:{storage.sha256_hex(raw)}:{file.filename}"
     existing = db.scalar(select(Input).where(
         Input.case_id == ctx.case.id, Input.idempotency_key == idempotency_key))
-    if existing:
-        return _serialize_input(db, existing)
-
-    inp = Input(case_id=ctx.case.id, kind=kind, filename=filename,
+    if existing is not None:
+        response.status_code = status.HTTP_200_OK
+        return _serialize_input(db, existing, replayed=True)
+    inp = Input(case_id=ctx.case.id, kind=kind, filename=file.filename,
                 content_type=file.content_type, byte_length=len(raw),
                 payload=json.dumps({"meta": meta}), created_by=ctx.user.id,
                 idempotency_key=idempotency_key)
@@ -221,14 +226,14 @@ async def upload(
                 db, ctx.case.id, ctx.user.id, rows, json.loads(meta or "{}"), inp.id)
             inp.status = f"comments_imported:{summary['comments_created']}"
     except (ValueError, json.JSONDecodeError) as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc))
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
     record(db, ctx.user.id, "input.upload", "input", inp.id, ctx.case.id,
            {"filename": filename, "bytes": len(raw)})
     db.commit()
     return _serialize_input(db, inp)
 
 
-def _serialize_input(db: Session, inp: Input) -> InputOut:
+def _serialize_input(db: Session, inp: Input, replayed: bool = False) -> InputOut:
     access = db.scalars(select(SourceAccess).where(SourceAccess.input_id == inp.id)).all()
     return InputOut(
         id=inp.id, kind=inp.kind, status=inp.status, filename=inp.filename,
@@ -236,6 +241,7 @@ def _serialize_input(db: Session, inp: Input) -> InputOut:
         payload=json.loads(inp.payload),
         source_access=[{"provider": a.provider, "outcome": a.outcome, "detail": a.detail,
                         "checked_at": a.checked_at.isoformat()} for a in access],
+        replayed=replayed,
         created_at=inp.created_at,
     )
 

@@ -1,8 +1,8 @@
 """Authentication, RBAC, case isolation and input-defence helpers.
 
-Master prompt sections 4, 17 and 19. The dev token scheme is intentional and
-labeled in the UI/API docs — it must be replaced by an external identity
-provider before any real deployment.
+Production OIDC tokens are verified against an explicit JWKS, issuer and
+audience. External identities map only to operator-provisioned users; login
+never silently creates an account or grants case membership.
 """
 from __future__ import annotations
 
@@ -10,9 +10,10 @@ import html
 import ipaddress
 import socket
 from dataclasses import dataclass
-from pathlib import PurePosixPath
+from functools import lru_cache
 from urllib.parse import urlparse
 
+import jwt
 from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -37,19 +38,93 @@ settings = get_settings()
 
 
 # --------------------------------------------------------------------- auth
+def _unauthenticated() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or expired authentication token",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+@lru_cache(maxsize=4)
+def _oidc_jwks_client(jwks_url: str, timeout: int) -> jwt.PyJWKClient:
+    """Reuse PyJWT's key/JWK-set cache instead of refetching keys per request."""
+    return jwt.PyJWKClient(
+        jwks_url,
+        timeout=timeout,
+        headers={"Accept": "application/json"},
+    )
+
+
+def _oidc_user(token: str, db: Session) -> User:
+    if not all((settings.oidc_issuer, settings.oidc_audience, settings.oidc_jwks_url)):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="No production OIDC authentication provider is configured",
+        )
+    try:
+        jwks = _oidc_jwks_client(settings.oidc_jwks_url, settings.oidc_timeout_seconds)
+        signing_key = jwks.get_signing_key_from_jwt(token)
+        claims = jwt.decode(
+            token,
+            signing_key.key,
+            algorithms=settings.oidc_algorithm_list,
+            audience=settings.oidc_audience,
+            issuer=settings.oidc_issuer,
+            leeway=settings.oidc_leeway_seconds,
+            options={
+                "require": ["exp", "iat", "iss", "sub", "aud"],
+                "verify_signature": True,
+                "verify_exp": True,
+                "verify_iat": True,
+                "verify_iss": True,
+                "verify_aud": True,
+            },
+        )
+    except jwt.PyJWKClientError as exc:
+        # Key-service availability is not evidence that a credential is bad.
+        # Never include JWKS response bodies or keys in the client response.
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="OIDC key service is unavailable",
+        ) from exc
+    except (jwt.InvalidTokenError, ValueError, OSError) as exc:
+        raise _unauthenticated() from exc
+
+    user = db.scalar(select(User).where(
+        User.auth_issuer == str(claims["iss"]),
+        User.auth_subject == str(claims["sub"]),
+    ))
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="OIDC identity is authenticated but not provisioned in Scamurai",
+        )
+    return user
+
+
 def get_current_user(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> User:
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise _unauthenticated()
+    token = authorization.split(" ", 1)[1].strip()
+    if not token:
+        raise _unauthenticated()
+
+    if settings.dev_auth_enabled:
+        user = db.scalar(select(User).where(User.dev_token == token))
+        if user is not None:
+            return user
+    if settings.oidc_issuer or settings.oidc_jwks_url:
+        return _oidc_user(token, db)
     if not settings.dev_auth_enabled:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Development token authentication is disabled")
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Missing bearer token")
-    token = authorization.removeprefix("Bearer ").strip()
-    user = db.scalar(select(User).where(User.dev_token == token))
-    if user is None:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid token")
-    return user
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="No production authentication provider is configured",
+        )
+    raise _unauthenticated()
 
 
 def sanitize_upload_filename(filename: str | None) -> str:
@@ -148,8 +223,8 @@ def assert_public_url(url: str) -> str:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Blocked target")
     try:
         infos = socket.getaddrinfo(host, None)
-    except OSError:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Host cannot be resolved")
+    except OSError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Host cannot be resolved") from exc
     for info in infos:
         if ip_is_blocked(info[4][0]):
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Blocked non-public target")
