@@ -65,5 +65,51 @@ function MetadataTable({ metadata }: { metadata: Record<string, unknown> }) {
 function PixelPanel({ pixels }: { pixels: Record<string, any> }) {
   const residual = pixels.residual_statistics || {};
   const jpeg = pixels.jpeg_recompression || {};
-  return <div className="pixel-panel"><div className="case-meta"><span>Analysed {Array.isArray(pixels.analyzed_dimensions) ? pixels.analyzed_dimensions.join("×") : "—"}</span>{pixels.downsampled_for_analysis && <span>Downsampled</span>}</div><h4>Gaussian residual</h4><div className="metric-pairs"><div><span>Mean absolute</span><b>{residual.mean_absolute ?? "—"}</b></div><div><span>Std deviation</span><b>{residual.standard_deviation ?? "—"}</b></div><div><span>95th percentile</span><b>{residual.p95_absolute ?? "—"}</b></div></div><h4>JPEG q90 re-compression</h4>{jpeg.status === "not_applicable" ? <p className="muted">{jpeg.reason || "Not applicable to this file type."}</p> : <div className="metric-pairs"><div><span>Mean difference</span><b>{jpeg.mean_absolute_channel_difference ?? "—"}</b></div><div><span>95th percentile</span><b>{jpeg.p95_absolute_channel_difference ?? "—"}</b></div><div><span>Differences &gt; 20</span><b>{jpeg.fraction_channel_differences_above_20 ?? "—"}</b></div></div>}<small>Measurements are provided for comparison and review; no universal manipulation threshold is applied.</small></div>;
+  const ela = pixels.ela_analysis || {};
+  const fft = pixels.fft_spectral_analysis || {};
+  return (
+    <div className="pixel-panel">
+      <div className="case-meta">
+        <span>Analysed {Array.isArray(pixels.analyzed_dimensions) ? pixels.analyzed_dimensions.join("×") : "—"}</span>
+        {pixels.downsampled_for_analysis && <span>Downsampled</span>}
+      </div>
+      <h4>Gaussian residual</h4>
+      <div className="metric-pairs">
+        <div><span>Mean absolute</span><b>{residual.mean_absolute ?? "—"}</b></div>
+        <div><span>Std deviation</span><b>{residual.standard_deviation ?? "—"}</b></div>
+        <div><span>95th percentile</span><b>{residual.p95_absolute ?? "—"}</b></div>
+      </div>
+      {ela.mean_error !== undefined && (
+        <>
+          <h4>InVID-style Error Level Analysis (ELA q95)</h4>
+          <div className="metric-pairs">
+            <div><span>Mean ELA error</span><b>{ela.mean_error}</b></div>
+            <div><span>Max divergence</span><b>{ela.max_error}</b></div>
+            <div><span>High error pixels (&gt;15)</span><b>{ela.high_error_pixel_ratio}</b></div>
+          </div>
+        </>
+      )}
+      {fft.high_frequency_energy_ratio !== undefined && (
+        <>
+          <h4>Sentinel-style 2D FFT Spectral Distribution</h4>
+          <div className="metric-pairs">
+            <div><span>High-freq energy ratio</span><b>{fft.high_frequency_energy_ratio}</b></div>
+            <div><span>Low-freq energy ratio</span><b>{fft.low_frequency_energy_ratio}</b></div>
+            <div><span>Spectral balance</span><b>{fft.spectral_energy_balance}</b></div>
+          </div>
+        </>
+      )}
+      <h4>JPEG q90 re-compression</h4>
+      {jpeg.status === "not_applicable" ? (
+        <p className="muted">{jpeg.reason || "Not applicable to this file type."}</p>
+      ) : (
+        <div className="metric-pairs">
+          <div><span>Mean difference</span><b>{jpeg.mean_absolute_channel_difference ?? "—"}</b></div>
+          <div><span>95th percentile</span><b>{jpeg.p95_absolute_channel_difference ?? "—"}</b></div>
+          <div><span>Differences &gt; 20</span><b>{jpeg.fraction_channel_differences_above_20 ?? "—"}</b></div>
+        </div>
+      )}
+      <small>Measurements are provided for comparison and review; no universal manipulation threshold is applied.</small>
+    </div>
+  );
 }

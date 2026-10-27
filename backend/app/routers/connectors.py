@@ -13,6 +13,7 @@ from ..security import require_case
 from ..services import graph, importer, storage
 from ..services.providers import factcheck as fc_provider
 from ..services.providers import mastodon as mastodon_provider
+from ..services.providers import telegram as tg_provider
 from ..services.providers import youtube as yt_provider
 
 router = APIRouter(prefix="/api/v1/cases/{case_id}/connectors", tags=["connectors"])
@@ -123,3 +124,47 @@ def factcheck_search(body: FactCheckQuery,
                             f"{exc.outcome}: {exc.detail}") from exc
     return {"query": body.query, "matches": matches,
             "note": "No result means no matching published fact-check, not that the claim is false."}
+
+
+class TelegramImport(BaseModel):
+    channel: str = Field(min_length=2, max_length=200)
+    limit: int = Field(default=40, ge=1, le=100)
+
+
+@router.post("/telegram/import", status_code=201)
+def telegram_import(body: TelegramImport,
+                    ctx=Depends(require_case({"analyst", "owner"})),
+                    db: Session = Depends(get_db)):
+    """Zero-API OSINT Import from public Telegram channels.
+    Extracts posts, timestamps, views, forwards and embedded IoCs.
+    """
+    try:
+        result = tg_provider.fetch_public_channel(body.channel, limit=body.limit)
+    except tg_provider.TelegramError as exc:
+        db.add(SourceAccess(
+            case_id=ctx.case.id, provider=f"telegram:{body.channel}", method="web.preview",
+            capability="public_channel:read", outcome=exc.outcome, detail=exc.detail))
+        db.commit()
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"{exc.outcome}: {exc.detail}")
+
+    raw = json.dumps(result, ensure_ascii=False).encode("utf-8")
+    evidence = EvidenceRecord(
+        case_id=ctx.case.id, collected_by=ctx.user.id, source_url=result["source_url"],
+        object_hash=storage.sha256_hex(raw), source_kind="public_channel_snapshot",
+        note=f"Public Telegram OSINT import from @{result['channel']}",
+    )
+    db.add(evidence)
+    db.flush()
+    key = storage.put_object(ctx.case.id, f"telegram/{evidence.id}.json", raw)
+    evidence.snapshot_key = key
+    graph.evidence_node(db, evidence)
+    counts = importer.import_posts_bundle(db, ctx.case.id, ctx.user.id, result["bundle"], None)
+    outcome = "successful" if counts["posts"] else "successful_empty"
+    db.add(SourceAccess(
+        case_id=ctx.case.id, provider=f"telegram:{result['channel']}", method="web.preview",
+        capability="public_channel:read", outcome=outcome,
+        detail=json.dumps({"channel": result["channel"], **counts})))
+    db.commit()
+    return {"channel": result["channel"], "evidence_id": evidence.id,
+            "posts_returned": result["posts_count"], **counts}
+

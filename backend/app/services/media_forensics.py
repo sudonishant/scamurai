@@ -94,6 +94,57 @@ def pixel_indicators(image: Image.Image, mime: str) -> dict:
         }
     else:
         result["jpeg_recompression"] = {"status": "not_applicable", "reason": "Source is not JPEG; no equivalent manipulation score is inferred."}
+
+    # InVID / WeVerify Style: Multi-channel Error Level Analysis (ELA) at q95
+    try:
+        ela_buffer = io.BytesIO()
+        working.save(ela_buffer, format="JPEG", quality=95, optimize=False)
+        ela_buffer.seek(0)
+        ela_recompressed = Image.open(ela_buffer).convert("RGB")
+        ela_orig = np.asarray(working, dtype=np.float32)
+        ela_recomp = np.asarray(ela_recompressed, dtype=np.float32)
+        ela_diff = np.abs(ela_orig - ela_recomp)
+        result["ela_analysis"] = {
+            "reference_quality": 95,
+            "mean_error": round(float(np.mean(ela_diff)), 5),
+            "max_error": round(float(np.max(ela_diff)), 5),
+            "standard_deviation": round(float(np.std(ela_diff)), 5),
+            "high_error_pixel_ratio": round(float(np.mean(ela_diff > 15.0)), 6),
+            "method": "InVID-style Error Level Analysis (ELA) comparing source against in-memory q95 JPEG recompression",
+            "forensic_cues": "Uniform error surfaces correspond to untouched captures; spliced, composited or selectively modified regions present anomalous error variance.",
+        }
+    except Exception as exc:
+        result["ela_analysis"] = {"status": "error", "reason": str(exc)}
+
+    # Sentinel / DeepMedia Style: 2D FFT Radial Frequency Energy Spectrum Analysis
+    try:
+        f = np.fft.fft2(pixels)
+        fshift = np.fft.fftshift(f)
+        magnitude = np.abs(fshift)
+        h, w = magnitude.shape
+        cy, cx = h // 2, w // 2
+        y, x = np.ogrid[:h, :w]
+        r = np.sqrt((x - cx) ** 2 + (y - cy) ** 2)
+        max_r = min(cx, cy)
+        low_freq_mask = r <= (max_r * 0.3)
+        high_freq_mask = (r > (max_r * 0.7)) & (r <= max_r)
+        
+        low_energy = float(np.sum(magnitude[low_freq_mask]))
+        high_energy = float(np.sum(magnitude[high_freq_mask]))
+        total_energy = float(np.sum(magnitude)) + 1e-9
+        
+        high_freq_ratio = round(high_energy / total_energy, 6)
+        low_freq_ratio = round(low_energy / total_energy, 6)
+        result["fft_spectral_analysis"] = {
+            "high_frequency_energy_ratio": high_freq_ratio,
+            "low_frequency_energy_ratio": low_freq_ratio,
+            "spectral_energy_balance": round(high_freq_ratio / (low_freq_ratio + 1e-9), 6),
+            "method": "2D Fast Fourier Transform (FFT) radial power distribution for high-frequency synthetic periodicity cues",
+            "interpretation_note": "Diffusion and GAN upsampling layers typically exhibit high-frequency spectral spikes or checkerboard anomalies.",
+        }
+    except Exception as exc:
+        result["fft_spectral_analysis"] = {"status": "error", "reason": str(exc)}
+
     return result
 
 
@@ -176,3 +227,82 @@ def analyze_asset(db: Session, case_id: str, media: MediaAsset, analysis_run: An
     db.add(record)
     db.flush()
     return record
+
+
+def analyze_video_keyframes(video_bytes: bytes, max_frames: int = 15, sample_fps: float = 1.0) -> dict:
+    """InVID / WeVerify style Video Keyframe Extraction and Temporal Forensic Analysis."""
+    import subprocess
+    import tempfile
+    import os
+
+    ffmpeg_bin = "/home/nee/.local/bin/ffmpeg" if os.path.exists("/home/nee/.local/bin/ffmpeg") else "ffmpeg"
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        input_file = os.path.join(tmpdir, "input_video.mp4")
+        with open(input_file, "wb") as f:
+            f.write(video_bytes)
+
+        frame_pattern = os.path.join(tmpdir, "frame_%04d.jpg")
+        cmd = [
+            ffmpeg_bin, "-y", "-i", input_file,
+            "-vf", f"fps={sample_fps}",
+            "-vframes", str(max_frames),
+            "-q:v", "2",
+            frame_pattern
+        ]
+        try:
+            subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=20)
+        except Exception as exc:
+            return {"status": "ffmpeg_execution_failed", "error": str(exc), "timeline": []}
+
+        frame_files = sorted([os.path.join(tmpdir, f) for f in os.listdir(tmpdir) if f.startswith("frame_") and f.endswith(".jpg")])
+        if not frame_files:
+            return {"status": "no_frames_extracted", "timeline": []}
+
+        timeline = []
+        ela_errors = []
+        fft_ratios = []
+
+        for idx, fpath in enumerate(frame_files):
+            try:
+                frame_img = Image.open(fpath)
+                frame_img.load()
+                pix = pixel_indicators(frame_img, mime="image/jpeg")
+                ela_mean = pix.get("ela_analysis", {}).get("mean_error", 0.0)
+                fft_ratio = pix.get("fft_spectral_analysis", {}).get("high_frequency_energy_ratio", 0.0)
+                ela_errors.append(ela_mean)
+                fft_ratios.append(fft_ratio)
+                timestamp_sec = round(idx / sample_fps, 2)
+                timeline.append({
+                    "frame_index": idx + 1,
+                    "timestamp_sec": timestamp_sec,
+                    "ela_mean_error": ela_mean,
+                    "fft_high_freq_ratio": fft_ratio,
+                    "dimensions": [frame_img.width, frame_img.height],
+                })
+            except Exception:
+                continue
+
+        mean_ela = float(np.mean(ela_errors)) if ela_errors else 0.0
+        std_ela = float(np.std(ela_errors)) if ela_errors else 0.0
+
+        anomalous_frames = []
+        for item in timeline:
+            if std_ela > 0.01 and item["ela_mean_error"] > (mean_ela + 1.8 * std_ela):
+                item["tampering_flag"] = "elevated_recompression_divergence"
+                anomalous_frames.append(item["timestamp_sec"])
+            else:
+                item["tampering_flag"] = "normal"
+
+        return {
+            "status": "completed",
+            "total_frames_extracted": len(timeline),
+            "sample_fps": sample_fps,
+            "mean_video_ela_error": round(mean_ela, 4),
+            "std_video_ela_error": round(std_ela, 4),
+            "flagged_timestamps_sec": anomalous_frames,
+            "timeline": timeline,
+            "methodology": "InVID-style keyframe decomposition with temporal ELA and 2D FFT spectral variance tracking",
+            "interpretation": "Spikes in ELA error or FFT energy at specific timestamps highlight composite edits, deepfake face-swaps, or spliced scene transitions."
+        }
+

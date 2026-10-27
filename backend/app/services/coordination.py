@@ -61,6 +61,38 @@ def _timing_gap(posts: list[Post], window_minutes: int) -> dict:
             "timing_feature": "missing_timestamps_count_as_unknown_not_zero"}
 
 
+def _compute_qut_coortweet_sync(posts: list[Post], account_a: str, account_b: str) -> dict:
+    """Compute QUT Coordination Network Toolkit & CooRTweet reciprocal delta-t coordination weight."""
+    posts_a = [p for p in posts if p.account_id == account_a and p.timestamp is not None]
+    posts_b = [p for p in posts if p.account_id == account_b and p.timestamp is not None]
+    if not posts_a or not posts_b:
+        return {"status": "insufficient_timestamped_actions", "coordination_weight": 0.0}
+
+    time_diffs_sec = []
+    for pa in posts_a:
+        diffs = [abs((pa.timestamp - pb.timestamp).total_seconds()) for pb in posts_b]
+        if diffs:
+            time_diffs_sec.append(min(diffs))
+
+    if not time_diffs_sec:
+        return {"status": "no_comparable_events", "coordination_weight": 0.0}
+
+    weights = [1.0 / (sec + 1.0) for sec in time_diffs_sec]
+    total_weight = sum(weights)
+    fastest = min(time_diffs_sec)
+    mean_gap = sum(time_diffs_sec) / len(time_diffs_sec)
+    sub_60s = sum(1 for sec in time_diffs_sec if sec <= 60.0)
+
+    return {
+        "coordination_weight": round(total_weight, 4),
+        "fastest_sync_seconds": round(fastest, 2),
+        "mean_sync_seconds": round(mean_gap, 2),
+        "synchronized_actions_under_60s": sub_60s,
+        "algorithm": "QUT CNT & CooRTweet: Sum of reciprocal delta-t time gaps W = sum(1 / (dt_sec + 1))",
+        "interpretation": "Values >= 1.0 with sub-60s gaps indicate non-random temporal synchronization of content propagation.",
+    }
+
+
 def _media_event_index(db: Session, case_id: str) -> dict[str, set[str]]:
     """Map account_id -> visual event ids derived from match edges + post links."""
     edges = db.scalars(select(GraphEdge).where(
@@ -220,11 +252,13 @@ def detect(db: Session, case_id: str, window_minutes: int | None = None) -> dict
             insufficient += 1
         else:
             review_state = "review_candidate"
+        qut_sync = _compute_qut_coortweet_sync(pair_posts[pair], account_a, account_b)
         features = {
             "shared_episodes": sorted(event_ids),
             "episode_count": len(event_ids),
             "event_kinds": event_kinds,
             "timing": timing,
+            "qut_coortweet_metrics": qut_sync,
             "hashtag_occurrences_in_corpus": hashtag_heavy,
             "corpus_size": len(posts),
             "baseline": "corpus-only baseline; no external platform-wide comparison",

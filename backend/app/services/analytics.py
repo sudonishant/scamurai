@@ -344,8 +344,11 @@ def _automation_indicators(posts: list[Post], accounts: dict[str, Account]) -> l
             triggered.append("frequent_sub_60_second_intervals")
         if regularity >= 0.75 and len(intervals) >= 3:
             triggered.append("unusually_regular_observed_intervals")
-        if high_rate_indicator >= 0.5:
-            triggered.append("high_observed_posting_rate")
+        hour_set = {t.hour for t in times}
+        has_24_7_activity = len(hour_set) >= 18 and span_seconds >= 86400
+        if has_24_7_activity:
+            triggered.append("diurnal_cycle_absence_24_7_activity")
+
         rows.append({
             "account_id": account_id,
             "handle": accounts[account_id].handle if account_id in accounts else "unknown",
@@ -363,6 +366,14 @@ def _automation_indicators(posts: list[Post], accounts: dict[str, Account]) -> l
                 "posts_per_hour": round(posts_per_hour, 3) if posts_per_hour is not None else None,
                 "observed_span_seconds": round(span_seconds, 1),
                 "timestamped_posts": len(times),
+                "diurnal_hours_active": len(hour_set),
+                "cyabra_radar": {
+                    "diurnal_anomaly_score": round(min(len(hour_set) / 24, 1.0), 2),
+                    "copypasta_ratio": round(cross_account_shared_ratio, 2),
+                    "burstiness_ratio": round(burst_ratio, 2),
+                    "regularity_score": round(regularity, 2),
+                    "astroturfing_risk": "critical" if (score and score >= 75 and has_24_7_activity) else ("elevated" if (score and score >= 60) else "low"),
+                },
             },
             "triggered_indicators": triggered,
             "formula": "100*(.30*cross_account_shared + .20*duplicates + .20*bursts + .15*regularity + .15*min(posts_per_hour/24,1))",

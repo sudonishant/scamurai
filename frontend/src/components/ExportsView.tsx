@@ -88,7 +88,11 @@ export default function ExportsView(
         <div>
           <label className="muted" htmlFor="export-format">Format</label>
           <select id="export-format" value={fmt} onChange={(e) => setFmt(e.target.value)}>
-            {["pdf", "html", "csv", "json"].map((f) => <option key={f}>{f}</option>)}
+            {["pdf", "html", "csv", "json", "maltego", "lea_dossier"].map((f) => (
+              <option key={f} value={f}>
+                {f === "maltego" ? "maltego (graph link csv)" : f === "lea_dossier" ? "LEA 65B Forensic Dossier (PDF)" : f}
+              </option>
+            ))}
           </select>
         </div>
         <div>

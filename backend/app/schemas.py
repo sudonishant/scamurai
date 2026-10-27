@@ -194,7 +194,7 @@ class FindingOut(BaseModel):
 
 # --------------------------------------------------------------------------- exports
 class ExportCreate(BaseModel):
-    fmt: Literal["pdf", "json", "csv", "html"]
+    fmt: Literal["pdf", "json", "csv", "html", "maltego", "lea_dossier"]
     scope: Literal["all", "selected", "flagged"] = "all"
     redaction_mode: Literal["redacted", "full"] = "redacted"
     selected_ids: list[str] = Field(default_factory=list)

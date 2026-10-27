@@ -536,3 +536,64 @@ def investigate(raw_target: str, selected_modules: list[str] | None = None) -> d
             "No port scanning, vulnerability exploitation, private access, breach lookup or identity resolution was performed.",
         ],
     }
+
+
+# --- SpiderFoot & ShadowDragon Style OSINT IoC Extractor ---
+BTC_RE = re.compile(r"\b(bc1[a-zA-HJ-NP-Z0-9]{25,39}|[13][a-km-zA-HJ-NP-Z1-9]{25,34})\b")
+ETH_RE = re.compile(r"\b0x[a-fA-F0-9]{40}\b")
+TRX_RE = re.compile(r"\bT[A-Za-z1-9]{33}\b")
+UPI_RE = re.compile(r"\b([a-zA-Z0-9.\-_]{2,40}@(okhdfcbank|okaxis|oksbi|okicici|paytm|ybl|ibl|upi|axl|apl|sbi|hdfcbank|icici|barodampay))\b", re.IGNORECASE)
+TELEGRAM_RE = re.compile(r"(?:t\.me/|@)([a-zA-Z0-9_]{5,32})", re.IGNORECASE)
+PHONE_IN_RE = re.compile(r"(?:\+91[\s\-]?)?([6-9]\d{9})\b")
+EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b")
+
+
+def extract_iocs_from_text(text: str) -> dict[str, list[str]]:
+    """Extract SpiderFoot & ShadowDragon style OSINT IoCs (Crypto, UPI, Telegram, Phone, Email)."""
+    if not text:
+        return {}
+
+    def _dedupe(matches):
+        seen = set()
+        out = []
+        for m in matches:
+            val = m if isinstance(m, str) else m[0]
+            if val and val not in seen:
+                seen.add(val)
+                out.append(val)
+        return out
+
+    iocs: dict[str, list[str]] = {}
+
+    btc = _dedupe(BTC_RE.findall(text))
+    if btc:
+        iocs["crypto_btc"] = btc
+    eth = _dedupe(ETH_RE.findall(text))
+    if eth:
+        iocs["crypto_eth"] = eth
+    trx = _dedupe(TRX_RE.findall(text))
+    if trx:
+        iocs["crypto_trx"] = trx
+
+    upis = _dedupe(UPI_RE.findall(text))
+    if upis:
+        iocs["upi_ids"] = upis
+
+    telegrams = _dedupe(TELEGRAM_RE.findall(text))
+    if telegrams:
+        clean_tg = [t for t in telegrams if not t.casefold().endswith((".com", ".org", ".net", ".io"))]
+        if clean_tg:
+            iocs["telegram_handles"] = clean_tg
+
+    phones = _dedupe(PHONE_IN_RE.findall(text))
+    if phones:
+        iocs["phone_numbers"] = phones
+
+    emails = _dedupe(EMAIL_RE.findall(text))
+    if emails:
+        clean_emails = [e for e in emails if not any(e.casefold().endswith(f"@{h}") for h in ("okhdfcbank", "paytm", "ybl", "upi", "okaxis", "oksbi"))]
+        if clean_emails:
+            iocs["email_addresses"] = clean_emails
+
+    return iocs
+
