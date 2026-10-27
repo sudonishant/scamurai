@@ -7,7 +7,10 @@ SCAMURAI_DATABASE_URL=postgresql+psycopg://user:pass@db/scamurai.
 from __future__ import annotations
 
 from collections.abc import Iterator
+from pathlib import Path
 
+from alembic import command
+from alembic.config import Config
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
@@ -37,8 +40,9 @@ def get_db() -> Iterator[Session]:
         db.close()
 
 
-def init_db() -> None:
-    # Dev/test convenience. Production schema changes go through Alembic migrations.
-    from . import models  # noqa: F401
-
-    Base.metadata.create_all(bind=engine)
+def upgrade_db() -> None:
+    """Apply checked-in schema revisions; application startup never creates tables."""
+    backend_dir = Path(__file__).resolve().parents[1]
+    config = Config(str(backend_dir / "alembic.ini"))
+    config.set_main_option("script_location", str(backend_dir / "alembic"))
+    command.upgrade(config, "head")

@@ -5,6 +5,7 @@ import json
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..config import get_settings
@@ -19,9 +20,12 @@ from ..models import (
     SourceAccess,
     User,
 )
+from ..policies import clamp_case_limits
 from ..registry import POST
-from ..schemas import CapabilityOut, CaseCreate, CaseOut, InputOut, TextInputCreate, UrlInputCreate
-from ..security import get_current_user, require_case, validate_image_signature
+from ..schemas import CapabilityOut, CaseCreate, CaseOut, InputOut, TextInputCreate, UrlInputCreate, UserOut
+from ..security import (
+    get_current_user, require_case, sanitize_upload_filename, validate_image_signature,
+)
 from ..services import connectors, graph, importer, storage
 from ..services.audit import record
 from ..services.textutil import normalize_text
@@ -52,12 +56,8 @@ def list_users(db: Session = Depends(get_db), user: User = Depends(get_current_u
 @router.post("/cases", response_model=CaseOut, status_code=201)
 def create_case(body: CaseCreate, db: Session = Depends(get_db),
                 user: User = Depends(get_current_user)):
-    # Policy guardrails are clamped server-side even if the client asks for more.
-    defaults = {"max_seed_urls": settings.max_seed_urls, "max_depth": settings.max_depth,
-                "max_new_entities": settings.max_new_entities,
-                "max_source_fetches": settings.max_source_fetches,
-                "run_deadline_seconds": settings.run_deadline_seconds}
-    clamped = {**defaults, **body.limits}
+    # Clients may tighten policy, but cannot raise deployment-configured ceilings.
+    clamped = clamp_case_limits(body.limits, settings)
     case = Case(
         title=body.title, purpose=body.purpose,
         allowed_sources=json.dumps(body.allowed_sources),
@@ -178,12 +178,22 @@ async def upload(
                 payload=json.dumps({"meta": meta}), created_by=ctx.user.id,
                 idempotency_key=idempotency_key)
     db.add(inp)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError:
+        # A concurrent identical retry may win the unique-key race after our
+        # initial lookup. Roll back this request's transaction and replay it.
+        db.rollback()
+        existing = db.scalar(select(Input).where(
+            Input.case_id == ctx.case.id, Input.idempotency_key == idempotency_key))
+        if existing:
+            return _serialize_input(db, existing)
+        raise
     try:
         if kind == "image":
             mime = validate_image_signature(raw)
             asset = importer.register_media(db, ctx.case.id, ctx.user.id, raw,
-                                            file.filename, mime, inp.id)
+                                            filename, mime, inp.id)
             inp.status = f"media_registered:{asset.id[:8]}"
         elif kind == "json":
             payload = importer.parse_json(raw)
@@ -215,12 +225,10 @@ async def upload(
             summary = importer.import_comment_rows(
                 db, ctx.case.id, ctx.user.id, rows, json.loads(meta or "{}"), inp.id)
             inp.status = f"comments_imported:{summary['comments_created']}"
-        else:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Unsupported upload kind")
     except (ValueError, json.JSONDecodeError) as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
     record(db, ctx.user.id, "input.upload", "input", inp.id, ctx.case.id,
-           {"filename": file.filename, "bytes": len(raw)})
+           {"filename": filename, "bytes": len(raw)})
     db.commit()
     return _serialize_input(db, inp)
 

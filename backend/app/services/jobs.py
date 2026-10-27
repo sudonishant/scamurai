@@ -26,7 +26,8 @@ from sqlalchemy.orm import Session
 
 from ..config import get_settings
 from ..database import SessionLocal
-from ..models import Job, JobEvent, utcnow
+from ..models import Case, Job, JobEvent, utcnow
+from ..policies import clamp_run_limits
 
 log = logging.getLogger("scamurai.jobs")
 settings = get_settings()
@@ -59,7 +60,12 @@ class JobContext:
         self.db = db
         self.job_id = job.id
         self.case_id = job.case_id
-        self.deadline = time.monotonic() + settings.run_deadline_seconds
+        self.parameters = json.loads(job.parameters or "{}")
+        case = db.get(Case, job.case_id)
+        case_limits = json.loads(case.limits) if case else {}
+        self.limits = clamp_run_limits(
+            case_limits, self.parameters.get("limits", {}), settings)
+        self.deadline = time.monotonic() + self.limits["run_deadline_seconds"]
         self.limitations: list[str] = []
         self.warnings: list[str] = []
         self.counts: dict[str, int] = {}
@@ -182,6 +188,8 @@ def _run_safely(job_id: str, kind: str) -> None:
             job.warnings = json.dumps(ctx.warnings + result.get("warnings", []))
             job.lifecycle = "completed"
             job.outcome = result.get("outcome", "complete")
+            if ctx.limitations and job.outcome == "complete":
+                job.outcome = "partial"
             job.stage = "completed"
             job.ended_at = utcnow()
             _emit(db, job, "completed", {"outcome": job.outcome, "counts": json.loads(job.counts)})

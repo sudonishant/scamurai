@@ -127,6 +127,15 @@ def get_current_user(
     raise _unauthenticated()
 
 
+def sanitize_upload_filename(filename: str | None) -> str:
+    """Reduce an untrusted client filename to a safe, bounded basename."""
+    normalized = (filename or "upload").replace("\\", "/")
+    name = PurePosixPath(normalized).name.replace("\x00", "").strip()
+    if name in {"", ".", ".."}:
+        name = "upload"
+    return name[:255]
+
+
 @dataclass
 class CaseContext:
     case: Case

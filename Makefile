@@ -18,6 +18,9 @@ install:
 	cd backend && pip install -r requirements-dev.txt
 	cd frontend && npm ci
 
+db-upgrade:
+	cd backend && alembic upgrade head
+
 fixtures:
 	cd backend && python fixtures/make_fixture_images.py
 

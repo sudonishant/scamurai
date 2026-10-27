@@ -13,6 +13,7 @@ import pytest
 _TMP = Path(tempfile.mkdtemp(prefix="scamurai-test-"))
 os.environ["SCAMURAI_DATABASE_URL"] = f"sqlite:///{_TMP / 'test.db'}"
 os.environ["SCAMURAI_STORAGE_DIR"] = str(_TMP / "storage")
+os.environ["SCAMURAI_DEV_AUTH_ENABLED"] = "true"
 os.environ["SCAMURAI_OCR_PROVIDER"] = ""
 os.environ["SCAMURAI_REVERSE_SEARCH_PROVIDER"] = ""
 os.environ["SCAMURAI_LLM_PROVIDER"] = ""
@@ -54,7 +55,9 @@ def client():
     from app.services.jobs import reconcile_orphans
 
     Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
+    with engine.begin() as connection:
+        connection.execute(text("DROP TABLE IF EXISTS alembic_version"))
+    upgrade_db()
     seed_users()
     reconcile_orphans()
     app = create_app()

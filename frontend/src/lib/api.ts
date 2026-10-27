@@ -144,6 +144,7 @@ async function request<T>(path: string, init: RequestInit = {}, fallbackHandler?
   if (isSandboxActive() && fallbackHandler) {
     return await fallbackHandler();
   }
+}
 
   const res = await liveFetch(path, init);
   if (res.status === 204) return undefined as T;

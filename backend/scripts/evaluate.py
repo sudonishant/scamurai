@@ -50,7 +50,9 @@ def main() -> None:
         import sys
         subprocess.run([sys.executable, str(FIXTURES / "make_fixture_images.py")], check=True)
     Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
+    with engine.begin() as connection:
+        connection.execute(text("DROP TABLE IF EXISTS alembic_version"))
+    upgrade_db()
     seed_users()
     client = TestClient(create_app())
     headers = {"Authorization": "Bearer dev-token-owner"}

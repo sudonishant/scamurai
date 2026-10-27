@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import cytoscape, { Core, ElementDefinition } from "cytoscape";
 import type { GraphData, GraphEdge, GraphNode } from "../lib/types";
 
@@ -106,7 +106,15 @@ export default function GraphCanvas({ data, onSelectNode, onSelectEdge, refreshT
         <button className="btn secondary" onClick={fit}>Fit</button>
         <button className="btn secondary" onClick={zoomIn}>+</button>
         <button className="btn secondary" onClick={zoomOut}>−</button>
+        <button className="btn secondary" disabled={!data.edges.length} aria-expanded={showRelationships} onClick={() => setShowRelationships((shown) => !shown)}>Inspect relationships</button>
       </div>
+      {showRelationships && <section aria-label="Graph relationship list" className="panel" style={{ position: "absolute", zIndex: 6, top: 48, left: 10, width: "min(360px, calc(100% - 20px))", maxHeight: 320, overflow: "auto", padding: 8, background: "var(--surface, #111820)" }}>
+        <b>Relationships ({data.edges.length})</b>
+        {data.edges.length === 0 ? <p className="muted">No relationships in the current graph.</p> : data.edges.map((edge) => <button key={edge.id} className="btn btn-secondary graph-relationship-option" style={{ display: "block", width: "100%", textAlign: "left", marginTop: 6 }} onClick={() => onSelectEdge(edge)}>
+          <span className={`badge ${edge.derivation_class}`}>{edge.derivation_class}</span> {edge.relationship.replaceAll("_", " ")}
+          <small style={{ display: "block", whiteSpace: "normal" }}>{edge.statement || "No statement recorded."}</small>
+        </button>)}
+      </section>}
       <div ref={hostRef} style={{ width: "100%", height: "100%" }} />
     </div>
   );
