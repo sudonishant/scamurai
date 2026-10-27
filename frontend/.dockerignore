@@ -1,0 +1,12 @@
+# Build stage runs `npm ci` itself; never ship local deps or artifacts.
+node_modules
+dist
+test-results
+playwright-report
+coverage
+.env
+.env.*
+.env.local
+*.tsbuildinfo
+Dockerfile
+.dockerignore
