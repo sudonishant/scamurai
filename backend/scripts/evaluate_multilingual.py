@@ -15,8 +15,8 @@ from types import SimpleNamespace
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-from app.services.analytics import _cosine, _tfidf_vectors  # noqa: E402
-from app.services.textutil import normalize_text  # noqa: E402
+from app.services.analytics import _cosine, _tfidf_vectors
+from app.services.textutil import normalize_text
 
 FIXTURE = pathlib.Path(__file__).resolve().parents[1] / "fixtures" / "multilingual_narratives.json"
 PRODUCTION_THRESHOLD = 0.48

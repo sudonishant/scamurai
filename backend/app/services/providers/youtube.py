@@ -89,7 +89,7 @@ def fetch_youtube_comments(url_or_id: str, *, max_pages: int = 5,
                 resp = client.get(_API, params=params)
             except httpx.HTTPError as exc:  # connect error, timeout, DNS…
                 raise YouTubeError("unavailable",
-                                   f"YouTube API transport failure: {type(exc).__name__}")
+                                   f"YouTube API transport failure: {type(exc).__name__}") from exc
             if resp.status_code == 403:
                 reason = resp.json().get("error", {}).get("errors", [{}])[0].get("reason", "")
                 outcome = ("rate_limited" if reason == "quotaExceeded"

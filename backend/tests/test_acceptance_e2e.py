@@ -5,12 +5,10 @@ and audited using only authorized local fixtures — no real platforms.
 """
 from __future__ import annotations
 
-import io
 import json
 from pathlib import Path
 
 import pytest
-from PIL import Image
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 
@@ -197,6 +195,7 @@ def test_review_rbac_and_exports(client, auth, populated_case, run_workflow):
 
 def test_idempotent_runs_and_reopening(client, auth, populated_case, run_workflow):
     first = run_workflow(populated_case, "comment_analysis", "idem-key-0001")
+    assert first["lifecycle"] == "completed", first
     # Replay with the same client idempotency key returns the same job, no duplicate effects.
     r = client.post(f"/api/v1/cases/{populated_case}/runs", headers=auth(),
                     json={"workflow": "comment_analysis", "client_idempotency_key": "idem-key-0001"})

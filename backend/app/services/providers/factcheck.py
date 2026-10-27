@@ -50,7 +50,7 @@ def search_factchecks(query: str, *, language_code: str | None = None,
             resp = client.get(_ENDPOINT, params=params)
         except httpx.HTTPError as exc:
             raise FactCheckError("unavailable",
-                                 f"Fact Check API transport failure: {type(exc).__name__}")
+                                 f"Fact Check API transport failure: {type(exc).__name__}") from exc
         if resp.status_code == 429:
             raise FactCheckError("rate_limited", "Fact Check API rate limit")
         if resp.status_code == 403:

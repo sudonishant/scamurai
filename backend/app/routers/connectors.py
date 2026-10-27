@@ -52,7 +52,7 @@ def youtube_import(body: YouTubeImport,
             capability="comments:read", outcome=exc.outcome, detail=exc.detail))
         db.commit()
         raise HTTPException(status.HTTP_502_BAD_GATEWAY,
-                            f"{exc.outcome}: {exc.detail}")
+                            f"{exc.outcome}: {exc.detail}") from exc
 
     # The API does not provide a comparable platform-displayed total, so the
     # coverage statement stays honest: denominator unknown/uncomparable.
@@ -120,6 +120,6 @@ def factcheck_search(body: FactCheckQuery,
             body.query, language_code=body.language_code, max_age_days=body.max_age_days)
     except fc_provider.FactCheckError as exc:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY,
-                            f"{exc.outcome}: {exc.detail}")
+                            f"{exc.outcome}: {exc.detail}") from exc
     return {"query": body.query, "matches": matches,
             "note": "No result means no matching published fact-check, not that the claim is false."}

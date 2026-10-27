@@ -11,14 +11,14 @@ Design rules enforced at the data layer:
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import (
     Boolean,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
-    Float,
     String,
     Text,
     UniqueConstraint,
@@ -29,7 +29,7 @@ from .database import Base
 
 
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def uuid_pk() -> Mapped[str]:
@@ -70,7 +70,7 @@ class Case(Base, TimestampMixin):
     schema_version: Mapped[str] = mapped_column(String(40), default="scamurai-0.1")
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
 
-    memberships: Mapped[list["CaseMembership"]] = relationship(cascade="all, delete-orphan")
+    memberships: Mapped[list[CaseMembership]] = relationship(cascade="all, delete-orphan")
 
 
 class CaseMembership(Base):

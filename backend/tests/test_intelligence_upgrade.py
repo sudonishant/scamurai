@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import json
 
-from app.services import osint as osint_svc
 from app.security import ip_is_blocked
+from app.services import osint as osint_svc
 
 
 def test_non_global_ip_ranges_are_blocked():
@@ -73,7 +73,7 @@ def _campaign_bundle():
     times = ["00:05", "01:05", "02:05", "03:01", "03:02", "03:03"]
     handles = ["alpha", "beta", "alpha", "alpha", "beta", "gamma"]
     posts = []
-    for index, (time, handle) in enumerate(zip(times, handles)):
+    for index, (time, handle) in enumerate(zip(times, handles, strict=True)):
         posts.append({
             "source_id": f"p-{index}", "account_handle": handle,
             "url": f"https://example.social/{handle}/status/{index}",

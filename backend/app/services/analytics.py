@@ -13,19 +13,26 @@ import math
 import statistics
 import unicodedata
 from collections import Counter, defaultdict
-
-import networkx as nx
-from datetime import datetime, timedelta, timezone
-from typing import Iterable
+from collections.abc import Iterable
+from datetime import UTC, datetime, timedelta
+from itertools import pairwise
 from urllib.parse import urlparse
 
+import networkx as nx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..config import get_settings
 from ..models import (
-    Account, CoordinationCandidate, GeoObservation, GraphEdge, GraphNode,
-    MediaAsset, Post, SourceAccess, utcnow,
+    Account,
+    CoordinationCandidate,
+    GeoObservation,
+    GraphEdge,
+    GraphNode,
+    MediaAsset,
+    Post,
+    SourceAccess,
+    utcnow,
 )
 from .alerts import sync_alerts
 
@@ -47,14 +54,14 @@ def _iso(value: datetime | None) -> str | None:
     if value is None:
         return None
     if value.tzinfo is None:
-        value = value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc).isoformat()
+        value = value.replace(tzinfo=UTC)
+    return value.astimezone(UTC).isoformat()
 
 
 def _dt(value: datetime | None) -> datetime | None:
     if value is None:
         return None
-    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
 
 def _tokens(text: str) -> list[str]:
@@ -213,7 +220,7 @@ def _build_narratives(posts: list[Post], accounts: dict[str, Account], truncated
     narratives = []
     post_to_narrative: dict[str, str] = {}
     for cluster in clusters:
-        cluster = sorted(cluster, key=lambda p: _dt(p.timestamp) or _dt(p.created_at) or datetime.min.replace(tzinfo=timezone.utc))
+        cluster = sorted(cluster, key=lambda p: _dt(p.timestamp) or _dt(p.created_at) or datetime.min.replace(tzinfo=UTC))
         post_ids = [p.id for p in cluster]
         digest = hashlib.sha256(",".join(sorted(post_ids)).encode()).hexdigest()[:12]
         narrative_id = f"narrative-{digest}"
@@ -233,7 +240,7 @@ def _build_narratives(posts: list[Post], accounts: dict[str, Account], truncated
                 by_account[post.account_id].append(post)
         propagation = []
         for account_id, account_posts in sorted(by_account.items(), key=lambda item: min(
-                [_dt(p.timestamp) or datetime.max.replace(tzinfo=timezone.utc) for p in item[1]])):
+                [_dt(p.timestamp) or datetime.max.replace(tzinfo=UTC) for p in item[1]])):
             first = account_posts[0]
             propagation.append({
                 "account_id": account_id,
@@ -308,9 +315,9 @@ def _automation_indicators(posts: list[Post], accounts: dict[str, Account]) -> l
     rows = []
     for account_id, account_posts in by_account.items():
         n = len(account_posts)
-        ordered = sorted(account_posts, key=lambda p: _dt(p.timestamp) or datetime.min.replace(tzinfo=timezone.utc))
+        ordered = sorted(account_posts, key=lambda p: _dt(p.timestamp) or datetime.min.replace(tzinfo=UTC))
         times = [_dt(p.timestamp) for p in ordered if p.timestamp]
-        intervals = [(b - a).total_seconds() for a, b in zip(times, times[1:]) if (b - a).total_seconds() >= 0]
+        intervals = [(b - a).total_seconds() for a, b in pairwise(times) if (b - a).total_seconds() >= 0]
         normalized = [p.normalized_text for p in ordered if p.normalized_text]
         duplicate_ratio = (len(normalized) - len(set(normalized))) / n if n else 0.0
         shared_count = sum(1 for p in ordered if p.normalized_text and len(text_accounts[p.normalized_text]) > 1)
@@ -661,7 +668,7 @@ def build_analytics(db: Session, case_id: str) -> dict:
     account_rows = db.scalars(select(Account).where(Account.case_id == case_id)).all()
     accounts = {account.id: account for account in account_rows}
     all_posts = db.scalars(select(Post).where(Post.case_id == case_id)).all()
-    ordered_posts = sorted(all_posts, key=lambda p: _dt(p.timestamp) or _dt(p.created_at) or datetime.min.replace(tzinfo=timezone.utc))
+    ordered_posts = sorted(all_posts, key=lambda p: _dt(p.timestamp) or _dt(p.created_at) or datetime.min.replace(tzinfo=UTC))
     posts = ordered_posts[-MAX_CLUSTER_POSTS:]
     truncated = len(all_posts) > len(posts)
     narratives, post_to_narrative = _build_narratives(posts, accounts, truncated)
@@ -769,7 +776,7 @@ def build_account_detail(db: Session, case_id: str, account_id: str) -> dict | N
     accounts = {row.id: row for row in account_rows}
     all_posts = db.scalars(select(Post).where(Post.case_id == case_id)).all()
     ordered = sorted(all_posts, key=lambda post: (
-        _dt(post.timestamp) or _dt(post.created_at) or datetime.min.replace(tzinfo=timezone.utc)))
+        _dt(post.timestamp) or _dt(post.created_at) or datetime.min.replace(tzinfo=UTC)))
     analysis_posts = ordered[-MAX_CLUSTER_POSTS:]
     own_posts = [post for post in ordered if post.account_id == account_id]
     behavior = next((row for row in _automation_indicators(analysis_posts, accounts)

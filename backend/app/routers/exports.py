@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import Response
@@ -27,8 +28,7 @@ def _is_expired(export: Export) -> bool:
         return False
     expires = export.expires_at
     if expires.tzinfo is None:  # SQLite returns naive datetimes; compare in UTC
-        from datetime import timezone
-        expires = expires.replace(tzinfo=timezone.utc)
+        expires = expires.replace(tzinfo=UTC)
     return expires < utcnow()
 
 

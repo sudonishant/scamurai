@@ -48,6 +48,7 @@ def image_dir():
 @pytest.fixture()
 def client():
     from fastapi.testclient import TestClient
+
     from app.database import Base, engine
     from app.main import create_app, seed_users
     from app.services.jobs import reconcile_orphans

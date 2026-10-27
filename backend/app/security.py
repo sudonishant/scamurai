@@ -9,12 +9,11 @@ from __future__ import annotations
 import html
 import ipaddress
 import socket
-
-import jwt
 from dataclasses import dataclass
 from functools import lru_cache
 from urllib.parse import urlparse
 
+import jwt
 from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -215,8 +214,8 @@ def assert_public_url(url: str) -> str:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Blocked target")
     try:
         infos = socket.getaddrinfo(host, None)
-    except OSError:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Host cannot be resolved")
+    except OSError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Host cannot be resolved") from exc
     for info in infos:
         if ip_is_blocked(info[4][0]):
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Blocked non-public target")

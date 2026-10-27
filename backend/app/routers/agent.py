@@ -18,7 +18,6 @@ from ..schemas import JobOut
 from ..security import get_current_user, require_case
 from ..services.agent import BoundedAgent, ToolCall, ToolResult
 from ..services.jobs import create_or_get_job, submit
-from ..services import pipeline
 
 router = APIRouter(prefix="/api/v1/cases/{case_id}", tags=["agent"])
 

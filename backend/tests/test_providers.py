@@ -10,8 +10,8 @@ from app.config import get_settings
 from app.services.providers import factcheck as fc
 from app.services.providers import llm
 from app.services.providers import youtube as yt
-from app.services.providers.llm import LLMUnavailable
 from app.services.providers.factcheck import FactCheckError
+from app.services.providers.llm import LLMUnavailable
 from app.services.providers.youtube import YouTubeError
 
 settings = get_settings()

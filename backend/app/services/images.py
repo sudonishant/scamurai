@@ -10,7 +10,7 @@ from __future__ import annotations
 import io
 from dataclasses import dataclass
 
-from PIL import Image, ExifTags
+from PIL import ExifTags, Image
 from PIL.ExifTags import GPSTAGS
 
 from ..config import get_settings
@@ -45,7 +45,7 @@ def extract_exif_gps(image: Image.Image) -> dict | None:
     """Return raw GPS fields. Metadata-reported only — editable, not proof."""
     try:
         exif = image.getexif()
-    except Exception:  # noqa: BLE001
+    except Exception:
         return None
     gps_ifd = exif.get_ifd(ExifTags.IFD.GPSInfo) if hasattr(ExifTags, "IFD") else {}
     if not gps_ifd:

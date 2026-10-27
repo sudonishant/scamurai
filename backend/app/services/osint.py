@@ -19,10 +19,10 @@ import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from html.parser import HTMLParser
 from typing import Any
-from urllib.parse import quote, urlunparse, urlparse
+from urllib.parse import quote, urlparse, urlunparse
 
 import httpx
 import tldextract
@@ -40,7 +40,7 @@ _EXTRACT = tldextract.TLDExtract(suffix_list_urls=(), cache_dir=None)
 
 
 def utcnow_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 class SourceError(RuntimeError):
@@ -468,7 +468,7 @@ def collect_certificates(target: Target) -> tuple[str, dict]:
 def collect_archive(target: Target) -> tuple[str, dict]:
     if not target.url:
         raise SourceError("not_supported", "Archive lookup requires a URL or domain")
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    timestamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
     url = _url_with_params("https://archive.org/wayback/available", {"url": target.url, "timestamp": timestamp})
     payload = _json_source(url, max_bytes=500_000)
     closest = (payload.get("archived_snapshots") or {}).get("closest") if isinstance(payload, dict) else None
@@ -507,7 +507,6 @@ def investigate(raw_target: str, selected_modules: list[str] | None = None) -> d
         futures = {pool.submit(COLLECTORS[name], target): name for name in selected}
         for future in as_completed(futures):
             name = futures[future]
-            started = time.monotonic()
             try:
                 status, data = future.result()
                 results.append({"module": name, "status": status, "data": data, "error": None, "collected_at": utcnow_iso()})

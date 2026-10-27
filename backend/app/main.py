@@ -18,7 +18,21 @@ from . import __version__
 from .config import get_settings
 from .database import SessionLocal, init_db
 from .models import User
-from .routers import accounts, agent, alerts, analytics, cases, comments, connectors, exports, graph, media, osint, runs, search
+from .routers import (
+    accounts,
+    agent,
+    alerts,
+    analytics,
+    cases,
+    comments,
+    connectors,
+    exports,
+    graph,
+    media,
+    osint,
+    runs,
+    search,
+)
 from .services.jobs import reconcile_orphans
 
 settings = get_settings()

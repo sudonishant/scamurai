@@ -14,7 +14,7 @@ from pathlib import Path
 # Add backend directory to path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from app.services import claims, comments, coordination, hashing, images
+from app.services import claims, comments, hashing, images
 
 logging.basicConfig(level=logging.ERROR, stream=sys.stderr)
 
@@ -98,6 +98,7 @@ TOOLS = [
 
 def handle_analyze_media(args: dict) -> dict:
     import io
+
     from PIL import Image
 
     image_path = Path(args["image_path"])

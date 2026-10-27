@@ -197,7 +197,7 @@ def _run_safely(job_id: str, kind: str) -> None:
         except TimeoutError as exc:
             db.rollback()
             _fail(db, job_id, str(exc), retryable=True, ctx=ctx)
-        except Exception as exc:  # noqa: BLE001 — worker boundary must never die silently
+        except Exception as exc:
             log.exception("job %s failed", job_id)
             db.rollback()
             _fail(db, job_id, str(exc), retryable=False, ctx=ctx)

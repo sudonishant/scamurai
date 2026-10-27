@@ -17,7 +17,10 @@ from ..schemas import JobOut, RunCreate, TransformCreate
 from ..security import require_case
 from ..services import pipeline
 from ..services.jobs import (
-    create_or_get_job, read_events, request_cancel, submit,
+    create_or_get_job,
+    read_events,
+    request_cancel,
+    submit,
 )
 
 router = APIRouter(prefix="/api/v1/cases/{case_id}", tags=["runs"])

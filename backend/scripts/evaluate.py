@@ -19,10 +19,10 @@ os.environ.setdefault("SCAMURAI_DATABASE_URL",
                       f"sqlite:///{pathlib.Path(tempfile.mkdtemp()) / 'eval.db'}".replace("///", "///", 1))
 os.environ.setdefault("SCAMURAI_STORAGE_DIR", str(pathlib.Path(tempfile.mkdtemp()) / "store"))
 
-from fastapi.testclient import TestClient  # noqa: E402
+from fastapi.testclient import TestClient
 
-from app.database import Base, engine  # noqa: E402
-from app.main import create_app, seed_users  # noqa: E402
+from app.database import Base, engine
+from app.main import create_app, seed_users
 
 FIXTURES = pathlib.Path(__file__).resolve().parents[1] / "fixtures"
 IMAGES = FIXTURES / "images"
@@ -46,7 +46,8 @@ EXPECTED_COMMENT_CATEGORIES = {
 
 def main() -> None:
     if not IMAGES.exists():
-        import subprocess, sys
+        import subprocess
+        import sys
         subprocess.run([sys.executable, str(FIXTURES / "make_fixture_images.py")], check=True)
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)

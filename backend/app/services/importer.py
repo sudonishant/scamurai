@@ -10,16 +10,27 @@ import csv
 import hashlib
 import io
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models import (
-    Account, Comment, EvidenceRecord, GeoObservation, MediaAsset, Post, SourceAccess, utcnow,
+    Account,
+    Comment,
+    EvidenceRecord,
+    GeoObservation,
+    MediaAsset,
+    Post,
+    SourceAccess,
+    utcnow,
 )
 from ..registry import (
-    ACCOUNT, COMMENT, EVIDENCE, MEDIA, POST,
+    ACCOUNT,
+    COMMENT,
+    EVIDENCE,
+    MEDIA,
+    POST,
 )
 from ..security import validate_image_signature
 from . import graph, images, storage
@@ -32,7 +43,7 @@ def _parse_ts(value: str | None, precision: str | None) -> tuple[datetime | None
     try:
         dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(tzinfo=UTC)
         return dt, precision or ("day" if len(value) <= 10 else "minute")
     except (ValueError, AttributeError):
         return None, "unknown"

@@ -10,7 +10,14 @@ from sqlalchemy.orm import Session
 from ..config import get_settings
 from ..database import get_db
 from ..models import (
-    AuditEvent, Case, CaseMembership, EvidenceRecord, Input, Post, SourceAccess, User,
+    AuditEvent,
+    Case,
+    CaseMembership,
+    EvidenceRecord,
+    Input,
+    Post,
+    SourceAccess,
+    User,
 )
 from ..registry import POST
 from ..schemas import CapabilityOut, CaseCreate, CaseOut, InputOut, TextInputCreate, UrlInputCreate
@@ -211,7 +218,7 @@ async def upload(
         else:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Unsupported upload kind")
     except (ValueError, json.JSONDecodeError) as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc))
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
     record(db, ctx.user.id, "input.upload", "input", inp.id, ctx.case.id,
            {"filename": file.filename, "bytes": len(raw)})
     db.commit()

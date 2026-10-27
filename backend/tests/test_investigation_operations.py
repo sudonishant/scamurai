@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 import jwt
@@ -11,11 +11,11 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 from sqlalchemy import select
 
+from app import security
 from app.config import Settings
 from app.database import SessionLocal
 from app.models import User
 from app.services import jobs, storage
-from app import security
 
 
 def _bundle():
@@ -32,7 +32,7 @@ def _bundle():
         "timestamp_precision": "minute", "collection_status": "authorized_test_import",
         "location": {"name": "Darbhanga", "latitude": 26.1542,
                      "longitude": 85.8918, "precision": "city_reported"},
-    } for index, (time, handle) in enumerate(zip(times, handles))]
+    } for index, (time, handle) in enumerate(zip(times, handles, strict=True))]
     return {"platform": "example-social", "accounts": accounts, "posts": posts}
 
 
@@ -83,7 +83,7 @@ def _oidc_setup(client, monkeypatch):
         db.commit()
 
     def token(subject="owner-subject", audience="scamurai-api", include_exp=True):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         claims = {"sub": subject, "iss": security.settings.oidc_issuer,
                   "aud": audience, "iat": now - timedelta(seconds=2)}
         if include_exp:
