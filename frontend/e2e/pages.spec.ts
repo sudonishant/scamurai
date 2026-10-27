@@ -46,6 +46,53 @@ test.beforeAll(async () => {
   await readFile(resolve(DIST, "404.html"));
 });
 
+const GEO_CASE_ID = "geo-status-fixture";
+
+function geoAnalytics({ coverage = {}, geospatial = {} }: { coverage?: Record<string, unknown>; geospatial?: Record<string, unknown> } = {}) {
+  return {
+    schema_version: "scamurai-analytics-test",
+    generated_at: "2026-10-27T00:00:00Z",
+    reference_time: null,
+    scope: "Fixture case only",
+    coverage: { posts: 0, ...coverage },
+    narratives: [],
+    automation: [],
+    network: { nodes: [], edges: [], clusters: [], limitations: [] },
+    geospatial: { points: [], locations: [], anomalies: [], map_note: "Aggregates only.", ...geospatial },
+    alerts: [],
+    limitations: [],
+  };
+}
+
+async function openGeoCase(page: Page, analytics: ReturnType<typeof geoAnalytics>) {
+  await emulatePages(page);
+  await page.route(`${ORIGIN}/api/v1/cases/**`, async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    const casePath = `/api/v1/cases/${GEO_CASE_ID}`;
+    let body: unknown;
+    if (pathname === casePath) {
+      body = {
+        id: GEO_CASE_ID, title: "Geo status fixture", purpose: "", allowed_sources: [],
+        date_from: null, date_to: null, languages: ["en"], retention_days: null,
+        limits: {}, my_role: "owner", created_at: "2026-10-27T00:00:00Z",
+      };
+    } else if (pathname === `${casePath}/analytics`) {
+      body = analytics;
+    } else if (pathname === `${casePath}/graph`) {
+      body = { nodes: [], edges: [], truncated: false, total_nodes: 0, total_edges: 0 };
+    } else if (pathname === `${casePath}/jobs`) {
+      body = [];
+    } else {
+      await route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ detail: "Unexpected fixture endpoint" }) });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.addInitScript(() => localStorage.setItem("scamurai.devToken", "dev-token-owner"));
+  await page.goto(`${ORIGIN}/scamurai/?case=${GEO_CASE_ID}&tab=geo`);
+  await expect(page.getByRole("heading", { name: "Location patterns" })).toBeVisible();
+}
+
 test("Pages fallback recovers path-style case and evidence deep links", async ({ page }) => {
   const runtimeErrors: string[] = [];
   page.on("pageerror", (error) => runtimeErrors.push(error.message));
@@ -106,6 +153,62 @@ test("connected API mode identifies live case-scoped data", async ({ page }) => 
   await expect(page.getByRole("heading", { name: "Choose an investigation" })).toBeVisible();
   await expect(page.getByRole("note", { name: "Data provenance notice" })).toContainText("LIVE API · CASE-SCOPED DATA");
   await expect(page.getByText("SYNTHETIC PUBLIC DEMO", { exact: true })).toHaveCount(0);
+});
+
+test("GeoView identifies an API-reported no-observation state", async ({ page }) => {
+  await openGeoCase(page, geoAnalytics({
+    coverage: { geolocated_posts: 0 },
+    geospatial: { privacy: { minimum_group_size: 3, suppressed_groups: 0, suppressed_observations: 0 } },
+  }));
+
+  await expect(page.getByRole("heading", { name: "No geo observations reported" })).toBeVisible();
+  await expect(page.getByText(/API reports 0 linked posts with geospatial observations/)).toBeVisible();
+});
+
+test("GeoView explains threshold suppression without exposing withheld locations", async ({ page }) => {
+  await openGeoCase(page, geoAnalytics({
+    coverage: { geolocated_posts: 2 },
+    geospatial: {
+      privacy: {
+        minimum_group_size: 3, suppressed_groups: 1, suppressed_observations: 2,
+        suppressed_location_labels: ["Hidden District Must Not Render"],
+      },
+    },
+  }));
+
+  await expect(page.getByRole("heading", { name: "Locations withheld by privacy threshold" })).toBeVisible();
+  await expect(page.getByText("1 group withheld.", { exact: false })).toBeVisible();
+  await expect(page.getByText("2 observations withheld.", { exact: false })).toBeVisible();
+  await expect(page.getByText("Suppression is not evidence of absence.", { exact: false })).toBeVisible();
+  await expect(page.getByText("Hidden District Must Not Render", { exact: false })).toHaveCount(0);
+  await expect(page.locator(".geo-map svg")).toHaveCount(0);
+});
+
+test("GeoView shows populated aggregates only when the API returns them", async ({ page }) => {
+  await openGeoCase(page, geoAnalytics({
+    coverage: { geolocated_posts: 3 },
+    geospatial: {
+      points: [{ key: "patna", label: "Patna", latitude: 25.5941, longitude: 85.1376, count: 2, intensity: 0.2, anomaly: false }],
+      locations: [{ key: "patna", label: "Patna", observation_count: 2, post_count: 2, protected_subject_count: 3, narrative_ids: [], sources: ["authorized_import"], precisions: ["city_reported"], last_observed: "2026-10-26T00:00:00Z", baseline_status: "insufficient_baseline", anomaly: null }],
+      privacy: { minimum_group_size: 3, suppressed_groups: 0, suppressed_observations: 0 },
+    },
+  }));
+
+  await expect(page.locator(".geo-map svg")).toBeVisible();
+  await expect(page.locator(".data-table")).toContainText("Patna");
+  await expect(page.locator(".metric-card").filter({ hasText: "Displayed geo observations" })).toContainText("2");
+  await expect(page.locator(".metric-card").filter({ hasText: "Displayed geo observations" })).toContainText("3 linked posts reported");
+});
+
+test("GeoView does not invent zero counts when coverage and privacy totals are missing", async ({ page }) => {
+  await openGeoCase(page, geoAnalytics({
+    coverage: {},
+    geospatial: { privacy: { minimum_group_size: 3 } },
+  }));
+
+  await expect(page.getByRole("heading", { name: "Geospatial status unavailable" })).toBeVisible();
+  await expect(page.getByText(/does not include enough coverage and privacy counts/)).toBeVisible();
+  await expect(page.getByText(/0 linked posts|0 groups|0 observations/i)).toHaveCount(0);
 });
 
 test("Pages fallback keeps unknown routes honest and offers a safe workspace link", async ({ page }) => {

@@ -213,7 +213,7 @@ export interface AnalyticsData {
     points: { key: string; label: string; latitude: number; longitude: number; count: number; intensity: number; anomaly: boolean }[];
     locations: Record<string, any>[];
     anomalies: Record<string, any>[];
-    privacy?: { minimum_group_size: number; suppressed_groups: number; suppressed_observations: number; basis: string };
+    privacy?: { minimum_group_size?: number; suppressed_groups?: number; suppressed_observations?: number; basis?: string };
     map_note: string;
   };
   alerts: AlertItem[];
