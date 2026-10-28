@@ -11,15 +11,27 @@ import os
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _default_database_url() -> str:
+    if os.environ.get("VERCEL"):
+        return "sqlite:////tmp/scamurai_dev.db"
+    return "sqlite:///./scamurai_dev.db"
+
+
+def _default_storage_dir() -> str:
+    if os.environ.get("VERCEL"):
+        return "/tmp/storage"
+    return str(Path(__file__).resolve().parents[2] / "var" / "storage")
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="SCAMURAI_", env_file=".env", extra="ignore")
 
     environment: str = "development"
-    database_url: str = "sqlite:///./scamurai_dev.db"
+    database_url: str = Field(default_factory=_default_database_url)
     # When set, the worker switches from in-process runner to Celery broker config.
     redis_url: str | None = None
     storage_backend: str = "local"  # local | s3
@@ -29,7 +41,7 @@ class Settings(BaseSettings):
     s3_access_key: str | None = None
     s3_secret_key: str | None = None
     s3_force_path_style: bool = True
-    storage_dir: str = str(Path(__file__).resolve().parents[2] / "var" / "storage")
+    storage_dir: str = Field(default_factory=_default_storage_dir)
 
     # Local development tokens are convenient only outside production. When
     # disabled, a fully configured OIDC issuer/JWKS/audience is mandatory.

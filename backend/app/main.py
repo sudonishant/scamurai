@@ -109,6 +109,8 @@ def create_app() -> FastAPI:
                  "s3" if settings.storage_backend == "s3" or settings.s3_endpoint else "local")
 
     @app.get("/health")
+    @app.get("/api/health")
+    @app.get("/api/v1/health")
     def health():
         return {"status": "ok", "version": __version__,
                 "authentication": {
