@@ -1,4 +1,4 @@
-# Scamurai — evidence-first coordinated-disinformation investigation
+ # Scamurai — evidence-first coordinated-disinformation investigation
 
 Scamurai is a FastAPI + React workspace for authorized analysts who need to collect public-source evidence, examine narrative propagation, review possible coordination, inspect media, and preserve a defensible audit trail.
 
